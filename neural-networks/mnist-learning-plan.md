@@ -178,9 +178,9 @@ Update this section as you go. It's the single most useful thing for resuming wo
 
 | Date | Step completed | Notes / observations / things to come back to |
 |------|---------------|------------------------------------------------|
-|      | Step 1        |                                                |
-|      | Step 2        |                                                |
-|      | Step 3        |                                                |
+| 5/26/2026 | Step 1   | Created simple install.ps1 script              |
+| 5/26/2026 | Step 2   | Created run script                             |
+| 5/27/2026 | Step 3   | Starting loss=2.310, after 1 epoch loss=0.653  |
 |      | Step 4        |                                                |
 |      | Step 5        |                                                |
 |      | Step 6        |                                                |
