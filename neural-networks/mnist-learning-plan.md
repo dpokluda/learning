@@ -178,10 +178,10 @@ Update this section as you go. It's the single most useful thing for resuming wo
 
 | Date | Step completed | Notes / observations / things to come back to |
 |------|---------------|------------------------------------------------|
-| 5/26/2026 | Step 1   | Created simple install.ps1 script              |
-| 5/26/2026 | Step 2   | Created run script                             |
-| 5/27/2026 | Step 3   | Starting loss=2.310, after 1 epoch loss=0.653  |
-|      | Step 4        |                                                |
+| 5/26/2026 | Step 1   | install.ps1 (winget python3 + pip torch/torchvision/matplotlib/numpy/jupyter/tqdm). smoke_test.py prints lib versions, CUDA=False (CPU only), autograd check d/dx(x³)@2=12 ✓ |
+| 5/26/2026 | Step 2   | run.py plots 25 random digits (5x5 grid, labels verified). Confirmed batch shape [N,1,28,28] and pixel range 0.0–1.0 after ToTensor() |
+| 5/27/2026 | Step 3   | Single nn.Linear(784,10), CrossEntropyLoss, SGD lr=0.01, 1 epoch, batch=64. EMA loss tracking. Start loss=2.310 (~ln10), end loss=0.653. Loss goes down ✓ |
+| 5/29/2026 | Step 4   | Added evaluate() w/ model.eval()+no_grad; 1 epoch SGD lr=0.01 → 86.74% test acc (below 90-92% target — loss still falling, undertrained. Try more epochs / higher lr in Step 6) |
 |      | Step 5        |                                                |
 |      | Step 6        |                                                |
 |      | Step 7        |                                                |
