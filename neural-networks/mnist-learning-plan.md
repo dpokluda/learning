@@ -182,8 +182,8 @@ Update this section as you go. It's the single most useful thing for resuming wo
 | 5/26/2026 | Step 2   | run.py plots 25 random digits (5x5 grid, labels verified). Confirmed batch shape [N,1,28,28] and pixel range 0.0–1.0 after ToTensor() |
 | 5/27/2026 | Step 3   | Single nn.Linear(784,10), CrossEntropyLoss, SGD lr=0.01, 1 epoch, batch=64. EMA loss tracking. Start loss=2.310 (~ln10), end loss=0.653. Loss goes down ✓ |
 | 5/29/2026 | Step 4   | Added evaluate() w/ model.eval()+no_grad; 1 epoch SGD lr=0.01 → 86.74% test acc (below 90-92% target — loss still falling, undertrained. Try more epochs / higher lr in Step 6) |
-|      | Step 5        |                                                |
-|      | Step 6        |                                                |
+| 6/5/2026 | Step 5   | MLP Linear(784,128)→ReLU→Linear(128,10), CrossEntropyLoss, SGD lr=0.01, 5 epochs. Depth + nonlinearity helps over the single linear layer ✓ |
+| 6/5/2026 | Step 6   | Experiment step — see step6/RESULTS.md for full tables. Key findings: (1) baseline MLP undertrained, not weak — SGD 15ep → 94% still climbing. (2) Adam lr=1e-3 hits 94.5% in 1 epoch, ~98% plateau by ep~8; mild overfitting onset (train loss keeps falling, test acc stalls). (3) LR sweep: 1e-3=97.9% best, 1e-2=97% jittery, 0.1=73% thrashing, 1.0=10% collapsed (loss pinned at ln10≈2.30). Adam collapses to chance rather than NaN. (4) 2nd hidden layer = ~0 gain (MLP saturated on MNIST ~98%). (5) Dropout sweet spot: 0.5 too strong (97.5%, underfit), none overfits slightly (97.8%), 0.2 just right → 98.07% best. Lesson: add regularization only when overfitting is measurable, and tune the dose. |
 |      | Step 7        |                                                |
 
 ---

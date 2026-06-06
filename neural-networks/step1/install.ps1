@@ -1,5 +1,14 @@
 winget install python3
 
+# On Ubuntu:
+# sudo apt install python3-venv
+# sudo apt install python3-pip
+# sudo apt install python-is-python3
+#
+# python3 -m venv .venv
+# . ./.venv/bin/Activeate.ps1
+
+
 # PyTorch core: tensors, autograd, neural network layers, and the training primitives (optimizers, loss functions).
 pip install torch 
 
