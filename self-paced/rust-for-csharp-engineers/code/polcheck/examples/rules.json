@@ -1,0 +1,28 @@
+{
+  "rules": [
+    {
+      "name": "require-owner",
+      "severity": "error",
+      "applies_to": ["vm", "storage"],
+      "condition": { "op": "exists", "field": "owner" }
+    },
+    {
+      "name": "env-must-be-known",
+      "severity": "warning",
+      "applies_to": [],
+      "condition": { "op": "oneOf", "field": "env", "values": ["dev", "staging", "prod"] }
+    },
+    {
+      "name": "prod-needs-cost-centre",
+      "severity": "error",
+      "applies_to": [],
+      "condition": {
+        "op": "any",
+        "of": [
+          { "op": "not", "of": { "op": "equals", "field": "env", "value": "prod" } },
+          { "op": "exists", "field": "cost_centre" }
+        ]
+      }
+    }
+  ]
+}

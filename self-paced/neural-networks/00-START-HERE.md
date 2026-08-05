@@ -14,26 +14,32 @@ You do not need a GPU. Every exercise in the companion is sized to run on a free
 
 The modules build strictly on one another, and each opens by naming the single module it depends on. Reading in order is strongly recommended, because later modules reuse the exact notation, the running example, and the mental models established earlier.
 
-| # | Module | What you'll be able to do afterwards |
-|---|--------|--------------------------------------|
-| [01](./01-what-is-a-neural-network.md) | What a neural network is | Explain a network as a parameterized function, trace the field's history, and say precisely why it works now and not in 1990 |
-| [02](./02-mathematical-foundations.md) | Just enough mathematics | Read and write the matrix, gradient, and probability notation the rest of the book uses without hesitation |
-| [03](./03-feedforward-networks-and-activations.md) | Feedforward networks and activations | Design an MLP, choose an activation for principled reasons, and state what universal approximation does and does not promise |
-| [04](./04-loss-functions-and-the-probabilistic-view.md) | Loss functions and the probabilistic view | Derive cross-entropy and MSE from maximum likelihood, and pick the right loss for a new problem by choosing a distribution |
-| [05](./05-backpropagation-and-autodiff.md) | Backpropagation and autodiff | Derive backprop by hand, implement a working autograd engine, and gradient-check any layer you write |
-| [06](./06-optimization.md) | Optimization | Explain what momentum, RMSProp, and Adam each fix, and choose a learning rate and schedule deliberately |
-| [07](./07-generalization-and-regularization.md) | Generalization and regularization | Diagnose overfitting from curves and apply weight decay, dropout, early stopping, and augmentation for the right reasons |
-| [08](./08-initialization-and-normalization.md) | Initialization and normalization | Explain vanishing/exploding gradients quantitatively, derive Xavier/He init, and say what BatchNorm and LayerNorm actually do |
-| [09](./09-practical-training-and-debugging.md) | Practical training and debugging | Build a correct training pipeline and systematically debug a model that won't learn |
-| [10](./10-convolutional-networks.md) | Convolutional networks | Compute conv output shapes and parameter counts by hand, and explain the LeNet → AlexNet → VGG → ResNet progression as a sequence of specific fixes |
-| [11](./11-sequence-models.md) | Sequence models | Explain RNN weight sharing, why LSTM gates preserve gradient, and exactly where seq2seq hits its bottleneck |
-| [12](./12-attention-and-transformers.md) | Attention and Transformers | Implement scaled dot-product and multi-head attention from scratch and explain every component of a Transformer block |
-| [13](./13-transfer-learning-and-embeddings.md) | Transfer learning and embeddings | Fine-tune a pretrained model correctly and reason about embeddings as a reusable representation |
-| [14](./14-modern-landscape.md) | The modern landscape | Place self-supervised learning, generative models, scaling laws, and LLMs on the map you've built |
-| [15](./15-reference.md) | Reference | Look up any term, formula, or source without rereading a chapter |
-| [capstone](./exercises/14-capstone.md) | Build and ablate a ResNet | Assemble the whole book into one working CIFAR-10 model, then measure what each ingredient actually contributed |
+The estimates below assume active reading — typing the code, working derivations with a pen, and doing each module's exercise set. Halve them if you only read.
 
-The [exercise companion](./exercises/00-HOW-TO-USE.md) runs alongside, one chapter per teaching module, with a written questionnaire and a PyTorch coding task each. Solutions live in a [separate folder](./exercises/solutions/) so you can genuinely test yourself before peeking. [`SETUP.md`](./SETUP.md) gets you running in Colab or locally in about five minutes.
+| # | Module | What you'll be able to do afterwards | Time |
+|---|--------|--------------------------------------|------|
+| — | [Start here](./00-START-HERE.md) | Know how the book is organized, how to read it, and which source tiers to trust | 15 min |
+| — | [Setup](./SETUP.md) | Get Colab or local Python ready with the exact package list | 30 min |
+| [01](./01-what-is-a-neural-network.md) | What a neural network is | Explain a network as a parameterized function, trace the field's history, and say precisely why it works now and not in 1990 | 2.5 h |
+| [02](./02-mathematical-foundations.md) | Just enough mathematics | Read and write the matrix, gradient, and probability notation the rest of the book uses without hesitation | 3 h |
+| [03](./03-feedforward-networks-and-activations.md) | Feedforward networks and activations | Design an MLP, choose an activation for principled reasons, and state what universal approximation does and does not promise | 2.5 h |
+| [04](./04-loss-functions-and-the-probabilistic-view.md) | Loss functions and the probabilistic view | Derive cross-entropy and MSE from maximum likelihood, and pick the right loss for a new problem by choosing a distribution | 3 h |
+| [05](./05-backpropagation-and-autodiff.md) | Backpropagation and autodiff | Derive backprop by hand, implement a working autograd engine, and gradient-check any layer you write | 5 h |
+| [06](./06-optimization.md) | Optimization | Explain what momentum, RMSProp, and Adam each fix, and choose a learning rate and schedule deliberately | 3.5 h |
+| [07](./07-generalization-and-regularization.md) | Generalization and regularization | Diagnose overfitting from curves and apply weight decay, dropout, early stopping, and augmentation for the right reasons | 3.5 h |
+| [08](./08-initialization-and-normalization.md) | Initialization and normalization | Explain vanishing/exploding gradients quantitatively, derive Xavier/He init, and say what BatchNorm and LayerNorm actually do | 3.5 h |
+| [09](./09-practical-training-and-debugging.md) | Practical training and debugging | Build a correct training pipeline and systematically debug a model that won't learn | 3.5 h |
+| [10](./10-convolutional-networks.md) | Convolutional networks | Compute conv output shapes and parameter counts by hand, and explain the LeNet → AlexNet → VGG → ResNet progression as a sequence of specific fixes | 5 h |
+| [11](./11-sequence-models.md) | Sequence models | Explain RNN weight sharing, why LSTM gates preserve gradient, and exactly where seq2seq hits its bottleneck | 4.5 h |
+| [12](./12-attention-and-transformers.md) | Attention and Transformers | Implement scaled dot-product and multi-head attention from scratch and explain every component of a Transformer block | 5 h |
+| [13](./13-transfer-learning-and-embeddings.md) | Transfer learning and embeddings | Fine-tune a pretrained model correctly and reason about embeddings as a reusable representation | 3.5 h |
+| [14](./14-modern-landscape.md) | The modern landscape | Place self-supervised learning, generative models, scaling laws, and LLMs on the map you've built | 1.5 h |
+| [15](./15-reference.md) | Reference | Look up any term, formula, or source without rereading a chapter | — |
+| [capstone](./exercises/14-capstone.md) | Build and ablate a ResNet | Assemble the whole book into one working CIFAR-10 model, then measure what each ingredient actually contributed | 8 h |
+
+**Total: roughly 55–60 hours** of active study. At five to six focused hours a week, that is a ten-to-twelve-week course; at an hour a night, it lands around two months. [`README.md`](./README.md) has three worked pacing schedules if you want a plan rather than a number.
+
+The [exercise companion](./exercises/00-HOW-TO-USE.md) runs alongside, one chapter per teaching module, with a written questionnaire and a PyTorch coding task each. Solutions live in a [separate folder](./exercises/solutions/) so you can genuinely test yourself before peeking. [`SETUP.md`](./SETUP.md) gets you running in Colab or locally in about half an hour.
 
 ## If you only have thirty minutes
 

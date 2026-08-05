@@ -1,0 +1,9 @@
+[package]
+name = "drills"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Deliberately empty: every Part 1 drill is solvable with the standard library
+# alone, and `cargo test` needs nothing that the toolchain does not ship.
+[dependencies]

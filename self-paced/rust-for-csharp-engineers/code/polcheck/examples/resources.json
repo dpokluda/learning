@@ -1,0 +1,5 @@
+[
+  { "id": "/subscriptions/s1/vm-web-01",  "type": "vm",      "fields": { "owner": "dave", "env": "prod", "cost_centre": "CC-100" } },
+  { "id": "/subscriptions/s1/vm-test-02", "type": "vm",      "fields": { "env": "sandbox" } },
+  { "id": "/subscriptions/s1/sa-logs",    "type": "storage", "fields": { "owner": "ops", "env": "prod" } }
+]

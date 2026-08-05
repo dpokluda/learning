@@ -22,26 +22,32 @@ You do **not** need a GPU. Every exercise is sized to run on a free Google Colab
 
 ## Module index
 
-| # | Module | Focus |
-|---|--------|-------|
-| — | [Start here](./00-START-HERE.md) | Orientation, how to read the book, source tiers |
-| — | [Setup](./SETUP.md) | Colab and local installation, exact package list |
-| 01 | [What a neural network is](./01-what-is-a-neural-network.md) | Perceptron, the historical arc, why deep learning works now |
-| 02 | [Just enough mathematics](./02-mathematical-foundations.md) | Linear algebra, calculus, probability — applied, and the notation used throughout |
-| 03 | [Feedforward networks and activations](./03-feedforward-networks-and-activations.md) | MLPs, activation functions, universal approximation |
-| 04 | [Loss functions and the probabilistic view](./04-loss-functions-and-the-probabilistic-view.md) | MLE, cross-entropy, MSE, numerical stability |
-| 05 | [Backpropagation and autodiff](./05-backpropagation-and-autodiff.md) | Derived by hand, then a working autograd engine in 60 lines |
-| 06 | [Optimization](./06-optimization.md) | SGD, momentum, RMSProp, Adam, learning-rate schedules |
-| 07 | [Generalization and regularization](./07-generalization-and-regularization.md) | Overfitting, L2, dropout, early stopping, augmentation, double descent |
-| 08 | [Initialization and normalization](./08-initialization-and-normalization.md) | Xavier/He, BatchNorm, LayerNorm, vanishing/exploding gradients |
-| 09 | [Practical training and debugging](./09-practical-training-and-debugging.md) | Data pipelines, hyperparameter tuning, a model that won't learn |
-| 10 | [Convolutional networks](./10-convolutional-networks.md) | Convolution, pooling, LeNet → AlexNet → VGG → ResNet |
-| 11 | [Sequence models](./11-sequence-models.md) | RNN, BPTT, LSTM/GRU, seq2seq and its bottleneck |
-| 12 | [Attention and Transformers](./12-attention-and-transformers.md) | Self-attention, multi-head, positional encoding, the full block |
-| 13 | [Transfer learning and embeddings](./13-transfer-learning-and-embeddings.md) | Fine-tuning, linear probing, LoRA, embeddings |
-| 14 | [The modern landscape](./14-modern-landscape.md) | Self-supervised learning, generative models, scaling laws, LLMs |
-| 15 | [Reference](./15-reference.md) | Glossary, formula sheet, debugging table, full bibliography |
-| ★ | [Capstone](./exercises/14-capstone.md) | Build a ResNet on CIFAR-10 from scratch, then ablate it and measure what each ingredient was worth |
+### Estimated time
+
+The estimates below assume active reading — typing the code, working derivations with a pen, and doing each module's exercise set. Halve them if you only read.
+
+| # | Module | Focus | Time |
+|---|--------|-------|------|
+| — | [Start here](./00-START-HERE.md) | Orientation, how to read the book, source tiers | 15 min |
+| — | [Setup](./SETUP.md) | Colab and local installation, exact package list | 30 min |
+| 01 | [What a neural network is](./01-what-is-a-neural-network.md) | Perceptron, the historical arc, why deep learning works now | 2.5 h |
+| 02 | [Just enough mathematics](./02-mathematical-foundations.md) | Linear algebra, calculus, probability — applied, and the notation used throughout | 3 h |
+| 03 | [Feedforward networks and activations](./03-feedforward-networks-and-activations.md) | MLPs, activation functions, universal approximation | 2.5 h |
+| 04 | [Loss functions and the probabilistic view](./04-loss-functions-and-the-probabilistic-view.md) | MLE, cross-entropy, MSE, numerical stability | 3 h |
+| 05 | [Backpropagation and autodiff](./05-backpropagation-and-autodiff.md) | Derived by hand, then a working autograd engine in 60 lines | 5 h |
+| 06 | [Optimization](./06-optimization.md) | SGD, momentum, RMSProp, Adam, learning-rate schedules | 3.5 h |
+| 07 | [Generalization and regularization](./07-generalization-and-regularization.md) | Overfitting, L2, dropout, early stopping, augmentation, double descent | 3.5 h |
+| 08 | [Initialization and normalization](./08-initialization-and-normalization.md) | Xavier/He, BatchNorm, LayerNorm, vanishing/exploding gradients | 3.5 h |
+| 09 | [Practical training and debugging](./09-practical-training-and-debugging.md) | Data pipelines, hyperparameter tuning, a model that won't learn | 3.5 h |
+| 10 | [Convolutional networks](./10-convolutional-networks.md) | Convolution, pooling, LeNet → AlexNet → VGG → ResNet | 5 h |
+| 11 | [Sequence models](./11-sequence-models.md) | RNN, BPTT, LSTM/GRU, seq2seq and its bottleneck | 4.5 h |
+| 12 | [Attention and Transformers](./12-attention-and-transformers.md) | Self-attention, multi-head, positional encoding, the full block | 5 h |
+| 13 | [Transfer learning and embeddings](./13-transfer-learning-and-embeddings.md) | Fine-tuning, linear probing, LoRA, embeddings | 3.5 h |
+| 14 | [The modern landscape](./14-modern-landscape.md) | Self-supervised learning, generative models, scaling laws, LLMs | 1.5 h |
+| 15 | [Reference](./15-reference.md) | Glossary, formula sheet, debugging table, full bibliography | — |
+| ★ | [Capstone](./exercises/14-capstone.md) | Build a ResNet on CIFAR-10 from scratch, then ablate it and measure what each ingredient was worth | 8 h |
+
+**Total: roughly 55–60 hours** of active study. At five to six focused hours a week, that is a ten-to-twelve-week course; at an hour a night, it lands around two months.
 
 ## The exercise companion
 
@@ -51,17 +57,17 @@ Each set has two parts. **Part A** is a written questionnaire of about six conce
 
 The intended loop is: answer Part A from memory, then do Part B in your editor or a Colab notebook, then check both against the solutions, and reread the module section if you fumbled either. Solutions are in a separate folder specifically so that peeking requires a deliberate act.
 
-Everything runs in Colab or locally on CPU. See [`SETUP.md`](./SETUP.md) for the exact package list and a five-minute setup.
+Everything runs in Colab or locally on CPU. See [`SETUP.md`](./SETUP.md) for the exact package list and a half-hour setup.
 
 ## Suggested pacing
 
-The book is about 200 pages of prose plus the exercises. Three sensible schedules:
+The book is about 200 pages of prose plus roughly 55–60 hours of active work with the exercises. Three sensible schedules:
 
-**Thorough (8–10 weeks, ~5 hours/week).** One module per session with its exercise set, two sessions a week. Modules 05, 10 and 12 deserve two sessions each — backpropagation, ResNet and attention are the three places where slowing down pays the most. This is the schedule the book is designed for.
+**Thorough (10–12 weeks, ~5–6 hours/week).** One ordinary module with its exercise set fits a week of evening work; pair the short orientation, setup and survey pieces with neighboring weeks. Modules 05, 10 and 12, plus the capstone, deserve two sessions each — backpropagation, ResNet and attention are the three places where slowing down pays the most. This is the schedule the book is designed for.
 
-**Intensive (2–3 weeks, full-time).** Two modules a day, exercises for every one. Do not skip Part A; under time pressure it is the first thing to go and the thing whose absence you will feel later.
+**Intensive (2–3 weeks, ~20–30 hours/week).** Two shorter modules or one hard module a day, exercises for every one. Do not skip Part A; under time pressure it is the first thing to go and the thing whose absence you will feel later.
 
-**Survey (a weekend).** Read [Module 01](./01-what-is-a-neural-network.md), [04](./04-loss-functions-and-the-probabilistic-view.md), [05](./05-backpropagation-and-autodiff.md), [10](./10-convolutional-networks.md) and [12](./12-attention-and-transformers.md), and do the exercises for 05 and 12. You will not be a practitioner, but the literature will be legible.
+**Survey (a long weekend, ~12–15 hours).** Read [Module 01](./01-what-is-a-neural-network.md), [04](./04-loss-functions-and-the-probabilistic-view.md), [05](./05-backpropagation-and-autodiff.md), [10](./10-convolutional-networks.md) and [12](./12-attention-and-transformers.md), and do the exercises for 05 and 12. You will not be a practitioner, but the literature will be legible.
 
 Whichever you pick, the modules build strictly on one another and each names the single module it depends on. Read in order; when something does not click, the fix is almost always to go back one module rather than forward.
 
