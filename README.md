@@ -30,6 +30,7 @@ Each book under `self-paced/` follows the same shape: a `README.md` front door, 
 | Book | Topic | Time |
 | --- | --- | --- |
 | [`self-paced/neural-networks/`](./self-paced/neural-networks) | Neural networks, from the perceptron to the Transformer, with a PyTorch companion. | ~55–60 h |
+| [`self-paced/principal-software-engineer/`](./self-paced/principal-software-engineer) | Distributed systems, storage engines, cloud architecture, algorithms at scale, multi-tenant data lakes, policy engines, production AI, and Principal engineering leadership, with an offline C# companion. | ~75–80 h |
 | [`self-paced/rust-for-csharp-engineers/`](./self-paced/rust-for-csharp-engineers) | Rust for senior .NET engineers — language core, ecosystem crates, and a shipped CLI capstone. | ~55–60 h |
 
 ## Current projects
