@@ -2,8 +2,8 @@
 
 If trees (Module 19) are the masters of ordered ranges and hierarchies, **Hash Tables**, **Heaps**, and **Graphs** are the masters of constant-time lookup, priority scheduling, and arbitrary network relationships.
 Every day in production, your C# services rely on `Dictionary<TKey, TValue>`, `PriorityQueue<TElement, TPriority>`, sorting pipelines, and dependency graphs.
-Yet under adversarial or high-scale workloads, naive assumptions about these three structures break down: a poorly seeded hash table degrades from \(O(1)\) to \(O(N)\) per insert during a hash-flooding denial-of-service attack; sorting a 5 TB dataset in memory crashes with `OutOfMemoryException` unless you switch to external \(K\)-way merge sort; and a subtle circular dependency in a microservice deployment manifest or package graph hangs the orchestrator forever unless caught by a three-color cycle detector or Kahn's topological sort.
-This module examines the internal memory layouts, invariants, and scale trade-offs of **Hash Tables** (chaining vs open addressing, Robin Hood probing, SipHash), **Heaps** (binary and \(d\)-ary array representation, \(O(N)\) `Heapify`, Top-\(K\) streaming), **Sorting** (in-memory vs external merge sort), and **Graphs** (`BFS`, `DFS`, `Dijkstra`, `A*`, `Topological Sort`, `Cycle Detection`, and `Union-Find`).
+Yet under adversarial or high-scale workloads, naive assumptions about these three structures break down: a poorly seeded hash table degrades from $O(1)$ to $O(N)$ per insert during a hash-flooding denial-of-service attack; sorting a 5 TB dataset in memory crashes with `OutOfMemoryException` unless you switch to external $K$-way merge sort; and a subtle circular dependency in a microservice deployment manifest or package graph hangs the orchestrator forever unless caught by a three-color cycle detector or Kahn's topological sort.
+This module examines the internal memory layouts, invariants, and scale trade-offs of **Hash Tables** (chaining vs open addressing, Robin Hood probing, SipHash), **Heaps** (binary and $d$-ary array representation, $O(N)$ `Heapify`, Top-$K$ streaming), **Sorting** (in-memory vs external merge sort), and **Graphs** (`BFS`, `DFS`, `Dijkstra`, `A*`, `Topological Sort`, `Cycle Detection`, and `Union-Find`).
 
 > **Prerequisite:** [Module 18: Capacity Planning and Asymptotic Analysis](./18-capacity-planning-and-asymptotic-analysis.md) and [Module 19: Trees, Tries, and Spatial Indexing](./19-trees-tries-and-spatial-indexing.md).
 
@@ -11,9 +11,9 @@ This module examines the internal memory layouts, invariants, and scale trade-of
 
 ## 1. Hash table internals: chaining vs open addressing, Robin Hood hashing, and SipHash
 
-A **Hash Table (Hash Map)** maps keys to values in \(O(1)\) average time by applying a deterministic **Hash Function** `h(key)` to project a large key universe onto an array of \(m\) bucket slots (`index = (h(key) & 0x7FFFFFFF) % m`)[^skiena-adm][^sedgewick-alg].
-Because the key universe is vastly larger than \(m\), two distinct keys will inevitably map to the same slot (**a hash collision**).
-Every hash table implementation resolves collisions using one of two memory architectures, governed by the **Load Factor** \(\alpha = \frac{n}{m}\) (the ratio of stored entries \(n\) to array slots \(m\)):
+A **Hash Table (Hash Map)** maps keys to values in $O(1)$ average time by applying a deterministic **Hash Function** `h(key)` to project a large key universe onto an array of $m$ bucket slots (`index = (h(key) & 0x7FFFFFFF) % m`)[^skiena-adm][^sedgewick-alg].
+Because the key universe is vastly larger than $m$, two distinct keys will inevitably map to the same slot (**a hash collision**).
+Every hash table implementation resolves collisions using one of two memory architectures, governed by the **Load Factor** $\alpha = \frac{n}{m}$ (the ratio of stored entries $n$ to array slots $m$):
 
 ```
 1. Separate Chaining (Linked Lists / Flat Entry Array):    2. Open Addressing (Linear Probing + Tombstones):
@@ -32,7 +32,7 @@ Buckets[]        Entries[] (Contiguous in .NET Dictionary)  Slots[] (All keys/va
 ### 1. Separate Chaining (and How .NET's `Dictionary<TKey, TValue>` Avoids Pointer Chasing)
 
 In textbook **Separate Chaining**, each bucket in the main array points to a heap-allocated singly linked list of colliding `(Key, Value)` nodes.
-Textbook linked-list chaining tolerates high load factors (\(\alpha > 1\)), but allocating a separate heap object per dictionary entry creates massive GC overhead and L1/L2 CPU cache misses on every collision hop!
+Textbook linked-list chaining tolerates high load factors ($\alpha > 1$), but allocating a separate heap object per dictionary entry creates massive GC overhead and L1/L2 CPU cache misses on every collision hop!
 
 Look at how **.NET's `Dictionary<TKey, TValue>`** fixes that brilliantly in production:
 Instead of allocating `LinkedListNode` objects on the heap, `.NET Dictionary` allocates **two contiguous flat arrays**: an `int[] _buckets` array and an `Entry[] _entries` struct array!
@@ -45,26 +45,26 @@ In **Open Addressing** (used by Python's `dict`, Rust's `HashMap / SwissTable`, 
 - **Linear Probing**: If slot `i = h(key) % m` is occupied by a different key, probe `i + 1`, `i + 2`, `i + 3` `(mod m)` sequentially until you find the key or an `EMPTY` slot. Because `i, i+1, i+2` sit inside the **exact same 64-byte L1 CPU cache line**, short linear probes are practically free on modern hardware!
 - **Why Deletion in Open Addressing Requires Tombstones**: Look at the Open Addressing diagram above. Both `Key A` and `Key B` hashed to `slot 1`. `Key A` took `slot 1`, and `Key B` probed forward to `slot 3` (because `slot 2` was also occupied at the time). Now suppose we delete whatever was at `slot 2`. **If we marked `slot 2` as `EMPTY`, a subsequent `Lookup(Key B)` starting at `slot 1` would hit `EMPTY` at `slot 2` and falsely stop, claiming `Key B` does not exist!**
   Instead, deleting a key in basic Open Addressing must write a **`TOMBSTONE` (Deleted Sentinel)**: `Lookup` treats a Tombstone as occupied and keeps probing past it, whereas `Insert` can reuse the Tombstone slot for a new key! (When Tombstones accumulate and lengthen probe chains, the table rehashes to clear them.)
-- **Robin Hood Hashing**: Standard linear probing suffers from primary clustering (long runs of occupied slots). **Robin Hood Hashing** tracks each entry's **Probe Sequence Length (`PSL`)**; how many slots away it sits from its ideal home bucket. When inserting a new key `X`, if `X` has probed further from its home (`PSL(X) = 4`) than the existing occupant `Y` at the current slot (`PSL(Y) = 1`), **`X` steals the slot from the "rich" key `Y` and continues inserting `Y` further down the array ("stealing from the rich and giving to the poor")**! This dramatically compresses probe-length variance so lookups remain fast even at load factors up to \(\alpha = 0.85\).
+- **Robin Hood Hashing**: Standard linear probing suffers from primary clustering (long runs of occupied slots). **Robin Hood Hashing** tracks each entry's **Probe Sequence Length (`PSL`)**; how many slots away it sits from its ideal home bucket. When inserting a new key `X`, if `X` has probed further from its home (`PSL(X) = 4`) than the existing occupant `Y` at the current slot (`PSL(Y) = 1`), **`X` steals the slot from the "rich" key `Y` and continues inserting `Y` further down the array ("stealing from the rich and giving to the poor")**! This dramatically compresses probe-length variance so lookups remain fast even at load factors up to $\alpha = 0.85$.
 
 ### 3. Hash-Flooding DoS Attacks and Keyed SipHash
 
 What happens if an external attacker sends an HTTP POST containing a JSON object with `50,000 keys` that have all been carefully crafted to produce the **exact same 32-bit hash code** in your deterministic non-cryptographic hash function?
-Every single one of the 50,000 keys collides into the **exact same bucket**, turning 50,000 \(O(1)\) insertions into \(\sum_{i=1}^{50000} i \approx 1.25 \times 10^9\) string comparisons (**\(O(N^2)\) time**); freezing a CPU core for 30 seconds on a single 500 KB HTTP request (**a Hash-Flooding Denial-of-Service Attack**)!
+Every single one of the 50,000 keys collides into the **exact same bucket**, turning 50,000 $O(1)$ insertions into $\sum_{i=1}^{50000} i \approx 1.25 \times 10^9$ string comparisons (**$O(N^2)$ time**); freezing a CPU core for 30 seconds on a single 500 KB HTTP request (**a Hash-Flooding Denial-of-Service Attack**)!
 Production runtimes defend against hash flooding in two ways:
 1. **Per-Process Randomized Hash Seeds / Keyed `SipHash`**: Runtimes initialize string hashing with a cryptographic random 128-bit secret key per process startup (or use **SipHash-2-4**) so an external attacker cannot precompute colliding keys offline.
-2. **Collision Threshold Treeification / Re-seeding**: If any single bucket chain in .NET `Dictionary` or Java `HashMap` exceeds a collision threshold (e.g., 100 collisions in .NET or 8 in Java), the runtime dynamically switches to a randomized cryptographic hash or converts the bucket chain into a balanced \(O(\log N)\) Red-Black Tree!
+2. **Collision Threshold Treeification / Re-seeding**: If any single bucket chain in .NET `Dictionary` or Java `HashMap` exceeds a collision threshold (e.g., 100 collisions in .NET or 8 in Java), the runtime dynamically switches to a randomized cryptographic hash or converts the bucket chain into a balanced $O(\log N)$ Red-Black Tree!
 
 ### 4. Classic Hash Table Problem Patterns (All Seven `Hash-Table.md` Drills)
 
-Beyond hash table internals, seven recurring data-processing drills from `Hash-Table.md` demonstrate how \(O(1)\) set/dictionary lookups collapse quadratic \(O(N^2)\) or \(O(N^4)\) loops into linear \(O(N)\) (or \(O(N^2)\)) single passes:
+Beyond hash table internals, seven recurring data-processing drills from `Hash-Table.md` demonstrate how $O(1)$ set/dictionary lookups collapse quadratic $O(N^2)$ or $O(N^4)$ loops into linear $O(N)$ (or $O(N^2)$) single passes:
 
-1. **Check if Two Arrays Are Disjoint (`O(N + M)` time, `O(min(N, M))` space)**: Two arrays are disjoint if they share zero elements in common (`A intersect B == empty`). Load the smaller array into a `HashSet<T> set` in \(O(\min(N, M))\) time and space, then iterate through the larger array and return `false` the instant `set.Contains(elem)` returns `true`. (This same `HashSet<T>` complement pattern solves **Two-Sum (`a + b == n`)**: for each `x`, check if `seen.Contains(n - x)` before adding `x` to `seen`.)
+1. **Check if Two Arrays Are Disjoint (`O(N + M)` time, `O(min(N, M))` space)**: Two arrays are disjoint if they share zero elements in common (`A intersect B == empty`). Load the smaller array into a `HashSet<T> set` in $O(\min(N, M))$ time and space, then iterate through the larger array and return `false` the instant `set.Contains(elem)` returns `true`. (This same `HashSet<T>` complement pattern solves **Two-Sum (`a + b == n`)**: for each `x`, check if `seen.Contains(n - x)` before adding `x` to `seen`.)
 2. **Find Symmetric Pairs `(a, b)` and `(b, a)` in an Array (`O(N)` time)**: Given an array of pairs `(first, second)`, store seen pairs in a `Dictionary<int, int> map`. For each pair `(a, b)`, check if `map.TryGetValue(b, out int existingTarget) && existingTarget == a`; if so, `(b, a)` and `(a, b)` are a symmetric pair! Otherwise set `map[a] = b`.
 3. **Find Two Pairs `(a, b)` and `(c, d)` Such That `a + b == c + d` (`O(N^2)` time instead of `O(N^4)`)**: Iterate through all index pairs `(i, j)` with `i < j`, compute `long sum = arr[i] + arr[j]`, and probe a `Dictionary<long, (int I, int J)> sumToPair`. If `sumToPair` already holds a pair `(p, q)` with `p != i && p != j && q != i && q != j`, return both pairs immediately; otherwise record `sumToPair[sum] = (i, j)`.
-4. **Find if a Subarray with Sum Equal to `0` (or `K`) Exists (`O(N)` Prefix-Sum Map)**: A contiguous subarray `arr[i..j]` sums to `0` if and only if the cumulative prefix sum at index `j` equals the cumulative prefix sum at index `i - 1` (\(P_j - P_{i-1} = 0 \iff P_j = P_{i-1}\)), or \(P_j = 0\) directly. Walk the array once while maintaining `long runningSum = 0` and a `HashSet<long> seenPrefixes = [0]`: if `arr[j] == 0` or `!seenPrefixes.Add(runningSum + arr[j])`, a zero-sum subarray exists! Generalizing to a `Dictionary<long, int> prefixCounts = new() { [0] = 1 }` counts how many subarrays sum to any target `K` by summing `prefixCounts.GetValueOrDefault(runningSum - K)`.
+4. **Find if a Subarray with Sum Equal to `0` (or `K`) Exists (`O(N)` Prefix-Sum Map)**: A contiguous subarray `arr[i..j]` sums to `0` if and only if the cumulative prefix sum at index `j` equals the cumulative prefix sum at index `i - 1` ($P_j - P_{i-1} = 0 \iff P_j = P_{i-1}$), or $P_j = 0$ directly. Walk the array once while maintaining `long runningSum = 0` and a `HashSet<long> seenPrefixes = [0]`: if `arr[j] == 0` or `!seenPrefixes.Add(runningSum + arr[j])`, a zero-sum subarray exists! Generalizing to a `Dictionary<long, int> prefixCounts = new() { [0] = 1 }` counts how many subarrays sum to any target `K` by summing `prefixCounts.GetValueOrDefault(runningSum - K)`.
 5. **First Non-Repeating Integer in an Array (`O(N)` two-pass frequency map)**: Pass 1 iterates through `arr` and populates `Dictionary<int, int> counts` (`counts[x] = counts.GetValueOrDefault(x) + 1`). Pass 2 iterates through `arr` in its **original array index order** and returns the first `x` where `counts[x] == 1`. Why iterate `arr` in Pass 2 instead of iterating `counts`? Because iterating `arr` guarantees returning the *first* non-repeating element in input order regardless of hash bucket ordering!
-6. **Remove Duplicates from an Unsorted Linked List Using Hashing (`O(N)` time)**: Maintain a `HashSet<T> visited`, a `Node? curr = head`, and a `Node? prev = null`. As you walk `curr`, if `visited.Add(curr.Value)` returns `true` (first time seen), advance `prev = curr`; if `visited.Add(curr.Value)` returns `false` (duplicate!), unlink `curr` in \(O(1)\) by setting `prev!.Next = curr.Next`.
+6. **Remove Duplicates from an Unsorted Linked List Using Hashing (`O(N)` time)**: Maintain a `HashSet<T> visited`, a `Node? curr = head`, and a `Node? prev = null`. As you walk `curr`, if `visited.Add(curr.Value)` returns `true` (first time seen), advance `prev = curr`; if `visited.Add(curr.Value)` returns `false` (duplicate!), unlink `curr` in $O(1)$ by setting `prev!.Next = curr.Next`.
 7. **Union and Intersection of Two Lists Using Hashing (`O(N + M)` time)**:
    - **Union (`A union B`)**: Traverse `list1` and `list2` sequentially with a single `HashSet<T> visited`; append each element `x` to the result list only when `visited.Add(x)` returns `true`.
    - **Intersection (`A intersect B`)**: Traverse `list1` and insert every element into `HashSet<T> inFirst`; then traverse `list2` and append `x` to the result list whenever `inFirst.Remove(x)` returns `true` (using `.Remove(x)` so duplicate copies of `x` in `list2` are not emitted twice!).
@@ -189,8 +189,8 @@ Whenever a system needs to repeatedly schedule the **earliest-expiring timer**, 
 ### Complete Binary Tree in a Flat Array (Zero Pointer Overhead)
 
 A **Binary Heap** is a **Complete Binary Tree** (every level is completely filled from left to right) that satisfies the **Heap Order Property**:
-- In a **Min-Heap**, every parent key is \(\le\) its children's keys (so the **global minimum** is always at the root `index 0` in \(O(1)\) time).
-- In a **Max-Heap**, every parent key is \(\ge\) its children's keys (so the **global maximum** is always at `index 0`).
+- In a **Min-Heap**, every parent key is $\le$ its children's keys (so the **global minimum** is always at the root `index 0` in $O(1)$ time).
+- In a **Max-Heap**, every parent key is $\ge$ its children's keys (so the **global maximum** is always at `index 0`).
 
 Because the tree is complete with zero gaps, a Binary Heap **never allocates tree node pointers**; it packs the entire tree into a single flat array `T[] heap`:
 
@@ -208,16 +208,16 @@ For any node at 0-based index i:
 
 - **`Insert(item)` (`O(log N)`)**: Append `item` at the end of the array (`index = Count`) and **`SiftUp` (Bubble Up)**: repeatedly swap it with its parent at `(i - 1) / 2` while it is smaller than its parent.
 - **`ExtractMin()` (`O(log N)`)**: Save `heap[0]` to return, move the last element `heap[Count - 1]` into `heap[0]`, shrink `Count` by 1, and **`SiftDown` (Bubble Down)**: repeatedly swap it with the *smaller* of its two children (`2i + 1` and `2i + 2`) until the heap property holds.
-- **Why `Heapify` (Building a Heap from an Unsorted Array) Is \(O(N)\), NOT \(O(N \log N)\)**:
-  If you insert \(N\) items one by one using `SiftUp`, the half of the nodes at the bottom leaf level travel up \(\log_2 N\) levels, taking \(O(N \log N)\).
+- **Why `Heapify` (Building a Heap from an Unsorted Array) Is $O(N)$, NOT $O(N \log N)$**:
+  If you insert $N$ items one by one using `SiftUp`, the half of the nodes at the bottom leaf level travel up $\log_2 N$ levels, taking $O(N \log N)$.
   Instead, **Floyd's Bottom-Up `Heapify`** starts at the **last internal parent node (`index = N/2 - 1`)** and runs `SiftDown` backward down to `index = 0`!
-  Because \(N/2\) nodes are leaves (requiring `0` swaps), \(N/4\) nodes are at height 1 (requiring at most `1` swap), and \(N/2^{h+1}\) nodes are at height \(h\), the total work is bounded by the convergent series:
-  \[
+  Because $N/2$ nodes are leaves (requiring `0` swaps), $N/4$ nodes are at height 1 (requiring at most `1` swap), and $N/2^{h+1}$ nodes are at height $h$, the total work is bounded by the convergent series:
+  $$
   \sum_{h=0}^{\lfloor \log_2 N \rfloor} \frac{N}{2^{h+1}} \cdot h \le N \sum_{h=0}^{\infty} \frac{h}{2^{h+1}} = \mathbf{O(N)}
-  \]
-  This same \(O(N)\) bottom-up `SiftDown` loop is how you **convert a Max-Heap array into a Min-Heap array in place in \(O(N)\) time**!
+  $$
+  This same $O(N)$ bottom-up `SiftDown` loop is how you **convert a Max-Heap array into a Min-Heap array in place in $O(N)$ time**!
 
-*(Production note: .NET's `PriorityQueue<TElement, TPriority>` uses an **Arity-4 (`4-ary`) Heap** (`children = 4i + 1 .. 4i + 4`, `parent = (i - 1) / 4`), because 4 contiguous children fit inside a single CPU cache line and reduce tree height by \(2\times\) during `SiftUp`!)*
+*(Production note: .NET's `PriorityQueue<TElement, TPriority>` uses an **Arity-4 (`4-ary`) Heap** (`children = 4i + 1 .. 4i + 4`, `parent = (i - 1) / 4`), because 4 contiguous children fit inside a single CPU cache line and reduce tree height by $2\times$ during `SiftUp`!)*
 
 ---
 
@@ -236,15 +236,15 @@ Every Principal engineer should know not just the asymptotic bounds of `Selectio
 
 ### 1. Elementary Quadratic Sorts: Selection, Insertion, and Bubble Sort (`Sort.md`)
 
-Why study the three elementary \(O(N^2)\) sorts if \(O(N \log N)\) algorithms exist? Because their loop invariants explain how data movement and hardware cache lines behave on small arrays:
+Why study the three elementary $O(N^2)$ sorts if $O(N \log N)$ algorithms exist? Because their loop invariants explain how data movement and hardware cache lines behave on small arrays:
 
-- **Selection Sort**: Divides the array into a sorted prefix `a[0..i-1]` and an unsorted suffix `a[i..N-1]`. In iteration `i`, it scans `j = i + 1 .. N - 1` to find the index `minIdx` of the smallest element in the unsorted suffix and swaps `a[i]` with `a[minIdx]`. Even if the input is already sorted, Selection Sort blindly performs \(\frac{N(N-1)}{2}\) comparisons (**\(\Theta(N^2)\) in all cases**), and its long-range swap can reorder equal elements (**unstable**). Its single virtue is that it executes **at most \(N - 1\) swaps total (\(O(N)\) memory writes)**.
+- **Selection Sort**: Divides the array into a sorted prefix `a[0..i-1]` and an unsorted suffix `a[i..N-1]`. In iteration `i`, it scans `j = i + 1 .. N - 1` to find the index `minIdx` of the smallest element in the unsorted suffix and swaps `a[i]` with `a[minIdx]`. Even if the input is already sorted, Selection Sort blindly performs $\frac{N(N-1)}{2}$ comparisons (**$\Theta(N^2)$ in all cases**), and its long-range swap can reorder equal elements (**unstable**). Its single virtue is that it executes **at most $N - 1$ swaps total ($O(N)$ memory writes)**.
 - **Insertion Sort**: Also maintains a sorted prefix `a[0..i-1]`, but instead of scanning the entire unsorted suffix for the global minimum, it takes the very next element `v = a[i]` and shifts larger elements in `a[0..i-1]` one slot to the right (`a[j] = a[j - 1]`) until `v` drops into its exact sorted slot.
-  Look at why **Insertion Sort is the undisputed champion for small arrays (\(N \le 24\)) and nearly sorted streams**:
+  Look at why **Insertion Sort is the undisputed champion for small arrays ($N \le 24$) and nearly sorted streams**:
   1. Using a single temp variable `v = a[i]` and shifting `a[j] = a[j - 1]` cuts memory writes in half compared to swapping `exchange(a[j-1], a[j])` on every step.
-  2. If each element in a stream is at most \(k\) positions away from its sorted position (an array with \(I\) inversions), Insertion Sort runs in **\(O(N + I)\) linear time**; just \(N - 1\) comparisons when the input is already sorted!
-  3. It has zero recursion overhead and walks sequentially within a single 64-byte CPU cache line, which is why `.NET Array.Sort` stops QuickSort recursion at partition size \(\le 16\) and finishes with Insertion Sort.
-- **Bubble Sort**: Repeatedly steps through the array comparing adjacent elements `(a[j - 1], a[j])` and swapping them if `a[j] < a[j - 1]`, so the next smallest (or largest) element "bubbles" into position at index `i`. Adding a boolean `bool swapped` flag per pass allows Bubble Sort to exit in \(O(N)\) if no swaps occur, but whenever elements are out of order it performs \(3\times\) more memory writes than Insertion Sort's shift loop.
+  2. If each element in a stream is at most $k$ positions away from its sorted position (an array with $I$ inversions), Insertion Sort runs in **$O(N + I)$ linear time**; just $N - 1$ comparisons when the input is already sorted!
+  3. It has zero recursion overhead and walks sequentially within a single 64-byte CPU cache line, which is why `.NET Array.Sort` stops QuickSort recursion at partition size $\le 16$ and finishes with Insertion Sort.
+- **Bubble Sort**: Repeatedly steps through the array comparing adjacent elements `(a[j - 1], a[j])` and swapping them if `a[j] < a[j - 1]`, so the next smallest (or largest) element "bubbles" into position at index `i`. Adding a boolean `bool swapped` flag per pass allows Bubble Sort to exit in $O(N)$ if no swaps occur, but whenever elements are out of order it performs $3\times$ more memory writes than Insertion Sort's shift loop.
 
 ```csharp
 public static class ElementarySorts
@@ -311,7 +311,7 @@ public static class ElementarySorts
 ### 2. Merge Sort ($O(N \log N)$ Worst-Case, Stable Divide-and-Conquer)
 
 Invented by John von Neumann in 1945, **Merge Sort** recursively splits `a[left..right]` at `mid = left + (right - left) / 2` until subarrays reach length 1, and then merges the two sorted halves `a[left..mid]` and `a[mid+1..right]` using an auxiliary buffer `temp[]`.
-Because splitting always divides the array in exact halves regardless of key values, Merge Sort obeys the recurrence \(T(N) = 2T(N/2) + \Theta(N)\), guaranteeing **\(\Theta(N \log N)\) time even in the worst case**.
+Because splitting always divides the array in exact halves regardless of key values, Merge Sort obeys the recurrence $T(N) = 2T(N/2) + \Theta(N)$, guaranteeing **$\Theta(N \log N)$ time even in the worst case**.
 Furthermore, writing `if (temp[i] <= temp[j])` (taking from the left half when keys are equal) makes Merge Sort **strictly stable**, preserving the relative order of records that share the same sort key.
 In production C#, allocate the auxiliary buffer `int[] temp = new int[a.Length]` **once** up front and pass it down the recursion rather than allocating a new array on every merge call!
 
@@ -375,13 +375,13 @@ private static void MergeSortRecursive(Span<int> a, int[] temp, int left, int ri
 
 ### 3. QuickSort: Hoare's Two-Pointer Partition vs Lomuto's Partition and Pivot Selection
 
-Developed by Tony Hoare in 1960, **QuickSort** sorts in place without an \(O(N)\) auxiliary buffer by choosing a **pivot** element `v`, **partitioning** the subarray so all elements \(\le v\) sit to the left of the pivot's final index `p` and all elements \(\ge v\) sit to the right, and recursively sorting `a[left..p-1]` and `a[p+1..right]`.
+Developed by Tony Hoare in 1960, **QuickSort** sorts in place without an $O(N)$ auxiliary buffer by choosing a **pivot** element `v`, **partitioning** the subarray so all elements $\le v$ sit to the left of the pivot's final index `p` and all elements $\ge v$ sit to the right, and recursively sorting `a[left..p-1]` and `a[p+1..right]`.
 
 You should know both classic partition schemes and why Hoare's scheme from `Sort.md` is faster in practice:
 1. **Hoare / Sedgewick Two-Pointer Partition (`Sort.md`)**: Places pivot `v = a[right]` at the right end, starts pointer `i = left - 1` scanning right (`while (a[++i] < v)`) and pointer `j = right` scanning left (`while (v < a[--j]) if (j == left) break;`). Whenever `i < j`, it swaps the out-of-place pair `(a[i], a[j])`; when the pointers cross (`i >= j`), it swaps the pivot `a[right]` into `a[i]` and returns `i`.
-   *Why stopping on equal keys (`< v` instead of `<= v`) matters*: If an array contains 1,000,000 identical keys (`[5, 5, 5, ...]`), stopping both pointers on keys equal to the pivot causes `i` and `j` to swap equal keys and meet at the **exact midpoint**, keeping the recursion tree balanced at \(O(N \log N)\) instead of degenerating to \(O(N^2)\)!
-2. **Lomuto Single-Direction Partition**: Maintains a single boundary index `storeIdx = left` and scans `j = left .. right - 1`: whenever `a[j] < pivot`, it swaps `a[storeIdx]` with `a[j]` and increments `storeIdx`, finally swapping the pivot into `a[storeIdx]`. Lomuto is simpler to write on a whiteboard, but performs \(3\times\) more swaps than Hoare's two-pointer scan on average and degrades to \(O(N^2)\) when all elements are equal.
-3. **Preventing the $O(N^2)$ Worst Case on Sorted Inputs (Median-of-Three Pivot Selection)**: If you naively pick `a[right]` as the pivot on an array that is *already sorted* (`[1, 2, 3, ..., N]`), every partition splits into `N - 1` and `0` elements, causing \(O(N^2)\) comparisons and \(O(N)\) stack depth! Selecting the **Median of Three** (`left`, `mid`, `right`) as the pivot guarantees an ideal midpoint split on sorted and reverse-sorted arrays.
+   *Why stopping on equal keys (`< v` instead of `<= v`) matters*: If an array contains 1,000,000 identical keys (`[5, 5, 5, ...]`), stopping both pointers on keys equal to the pivot causes `i` and `j` to swap equal keys and meet at the **exact midpoint**, keeping the recursion tree balanced at $O(N \log N)$ instead of degenerating to $O(N^2)$!
+2. **Lomuto Single-Direction Partition**: Maintains a single boundary index `storeIdx = left` and scans `j = left .. right - 1`: whenever `a[j] < pivot`, it swaps `a[storeIdx]` with `a[j]` and increments `storeIdx`, finally swapping the pivot into `a[storeIdx]`. Lomuto is simpler to write on a whiteboard, but performs $3\times$ more swaps than Hoare's two-pointer scan on average and degrades to $O(N^2)$ when all elements are equal.
+3. **Preventing the $O(N^2)$ Worst Case on Sorted Inputs (Median-of-Three Pivot Selection)**: If you naively pick `a[right]` as the pivot on an array that is *already sorted* (`[1, 2, 3, ..., N]`), every partition splits into `N - 1` and `0` elements, causing $O(N^2)$ comparisons and $O(N)$ stack depth! Selecting the **Median of Three** (`left`, `mid`, `right`) as the pivot guarantees an ideal midpoint split on sorted and reverse-sorted arrays.
 
 ```csharp
 public static class QuickSortAlgorithms
@@ -484,18 +484,18 @@ public static class QuickSortAlgorithms
 
 Suppose you need to sort a **10 TB log file** on disk using a worker with only **4 GB of RAM** (or compact 10 SSTables in an LSM-Tree, Module 06).
 You use **External $K$-Way Merge Sort**:
-1. **Run Generation Phase**: Read `4 GB` chunks of the 10 TB file into RAM one at a time, sort each 4 GB chunk in memory using `IntroSort`, and flush it out to disk as a sorted temporary file (**a Sorted Run**), producing \(K = \frac{10\text{ TB}}{4\text{ GB}} = 2{,}500\) sorted run files on disk.
-2. **$K$-Way Heap Merge Phase**: Open a buffered sequential file stream reader (say `1 MB` buffer each, using `2.5 GB` of RAM total) on the head of all \(K = 2{,}500\) sorted run files, and insert the first record from each stream into a **Min-Heap of size $K = 2{,}500$**:
-   - Repeatedly `ExtractMin()` from the Min-Heap (in \(\log_2(2500) \approx 12\) comparisons!), append that globally smallest record to the final sorted output file stream, and advance the file stream that owned that record to push its next record into the Min-Heap!
+1. **Run Generation Phase**: Read `4 GB` chunks of the 10 TB file into RAM one at a time, sort each 4 GB chunk in memory using `IntroSort`, and flush it out to disk as a sorted temporary file (**a Sorted Run**), producing $K = \frac{10\text{ TB}}{4\text{ GB}} = 2{,}500$ sorted run files on disk.
+2. **$K$-Way Heap Merge Phase**: Open a buffered sequential file stream reader (say `1 MB` buffer each, using `2.5 GB` of RAM total) on the head of all $K = 2{,}500$ sorted run files, and insert the first record from each stream into a **Min-Heap of size $K = 2{,}500$**:
+   - Repeatedly `ExtractMin()` from the Min-Heap (in $\log_2(2500) \approx 12$ comparisons!), append that globally smallest record to the final sorted output file stream, and advance the file stream that owned that record to push its next record into the Min-Heap!
 
 ---
 
 ## 4. Graphs: representations, traversals, topological sort, and shortest paths
 
-A **Graph** \(G = (V, E)\) models entities (**Vertices** \(V\)) and their pairwise relationships (**Edges** \(E\))[^skiena-adm].
+A **Graph** $G = (V, E)$ models entities (**Vertices** $V$) and their pairwise relationships (**Edges** $E$)[^skiena-adm].
 In memory, you represent a graph in one of two ways:
-- **Adjacency List (`List<Edge>[]` or `Dictionary<Vertex, List<Edge>>`)**: Takes **\(O(V + E)\) space** and iterates over a vertex's actual neighbors in \(O(\text{degree}(u))\) time. Because almost all real-world graphs (road networks, microservice call graphs, package dependency DAGs, social graphs) are **sparse** (\(E \ll V^2\)), **Adjacency Lists are the default choice 99% of the time**.
-- **Adjacency Matrix (`bool[V, V]` or `Weight[V, V]`)**: Takes **\(O(V^2)\) space** regardless of how few edges exist. Useful only for small, dense graphs (\(V \le 2{,}000\)) where \(O(1)\) edge-existence matrix multiplication is needed.
+- **Adjacency List (`List<Edge>[]` or `Dictionary<Vertex, List<Edge>>`)**: Takes **$O(V + E)$ space** and iterates over a vertex's actual neighbors in $O(\text{degree}(u))$ time. Because almost all real-world graphs (road networks, microservice call graphs, package dependency DAGs, social graphs) are **sparse** ($E \ll V^2$), **Adjacency Lists are the default choice 99% of the time**.
+- **Adjacency Matrix (`bool[V, V]` or `Weight[V, V]`)**: Takes **$O(V^2)$ space** regardless of how few edges exist. Useful only for small, dense graphs ($V \le 2{,}000$) where $O(1)$ edge-existence matrix multiplication is needed.
 
 ### Graph Traversals, Path Counting, Cycle Detection, and Topological Sort
 
@@ -533,13 +533,13 @@ Every Principal engineer must be able to write and reason about the core graph t
        return DfsCount(source);
    }
    ```
-   *(Note: if the graph is guaranteed to be a **DAG**, paths cannot cycle and we can memoize `int[] memo` at each node to count all paths in strict \(O(V + E)\) time instead of exponential path enumeration!)*
+   *(Note: if the graph is guaranteed to be a **DAG**, paths cannot cycle and we can memoize `int[] memo` at each node to count all paths in strict $O(V + E)$ time instead of exponential path enumeration!)*
 4. **Directed Cycle Detection (3-Color DFS State)**: In a **Directed Graph**, simply seeing an already-`visited` node during DFS does *not* mean there is a cycle (two diamond paths `A -> B -> D` and `A -> C -> D` both visit `D` without any cycle!). To detect a directed cycle, each vertex maintains **3 states** (or two boolean arrays `visited[]` and `stackFlag[]` as in `Graph.md`):
    - `0 = Unvisited (White)`
    - `1 = Visiting / Currently on Recursion Stack (Gray / stackFlag = true)`
    - `2 = Completely Explored (Black / visited = true, stackFlag = false)`
    **A directed graph contains a cycle if and only if DFS encounters an edge pointing to a vertex currently in state `1 (Visiting / On Stack)` (a back-edge)!**
-5. **Topological Sort and Task Scheduling (`DAG`, $O(V + E)$)**: Given \(N\) tasks labeled `0 .. N-1` with prerequisite pairs `(U, V)` where directed edge \(U \rightarrow V\) means *"$U$ must complete before $V$ can be scheduled,"* a **Topological Ordering** is a linear sequence of all vertices where every prerequisite appears before its dependents.
+5. **Topological Sort and Task Scheduling (`DAG`, $O(V + E)$)**: Given $N$ tasks labeled `0 .. N-1` with prerequisite pairs `(U, V)` where directed edge $U \rightarrow V$ means *"$U$ must complete before $V$ can be scheduled,"* a **Topological Ordering** is a linear sequence of all vertices where every prerequisite appears before its dependents.
    While you can compute a topological sort on an acyclic graph by running DFS and pushing each vertex onto a stack **only after all of its descendants have finished (`post-order reversal`)**, **Kahn's In-Degree Algorithm** is far superior in production because it is iterative (never overflows the call stack on deep DAGs), naturally exposes **parallel execution waves/stages**, and **solves Task Scheduling feasibility (`TopologicalOrder.Count == N`) by detecting cycles automatically**:
    ```text
    KAHN'S TOPOLOGICAL SORT (Iterative Queue + Task Scheduling Cycle Detection):
@@ -560,7 +560,7 @@ When edges carry numerical weights (such as network link latency in ms, routing 
 - **Dijkstra's Algorithm ($O((V + E) \log V)$)**: Finds the shortest path from a source vertex to all other vertices when **all edge weights are non-negative ($w(u, v) \ge 0$)**. Maintains a `dist[]` array (initialized to $\infty$, `dist[src] = 0`) and a **Min-Heap (`PriorityQueue<(int Vertex, long Dist), long>`)**. Repeatedly extracts the vertex $u$ with the smallest tentative distance; if `d > dist[u]`, skips it as a stale heap entry; otherwise relaxes each outgoing edge $(u, v)$: if $\text{dist}[u] + w(u, v) < \text{dist}[v]$, updates $\text{dist}[v]$ and pushes $(v, \text{dist}[v])$ into the Min-Heap.
 - **A\* Search**: Guides Dijkstra toward a specific target vertex $t$ by ordering the Min-Heap by $f(u) = g(u) + h(u)$, where $g(u) = \text{dist}[u]$ is the exact cost from the start and $h(u)$ is an **admissible heuristic** (such as straight-line Euclidean/Haversine distance to $t$ that never overestimates the true remaining cost).
 - **Bellman-Ford ($O(V \cdot E)$)**: Relaxes all $E$ edges $V - 1$ times; required only when edges can have **negative weights** (such as currency arbitrage or negative cost credits) and detects negative-weight cycles on the $V$-th pass.
-- **Union-Find (Disjoint Set) and Minimum Spanning Trees (`Kruskal's`)**: To track dynamic connected components across $N$ nodes (or build a Minimum Spanning Tree by sorting edges by weight in **Kruskal's Algorithm** and adding edges that connect disjoint components), **Union-Find** maintains an array `parent[i]` and `rank[i]`. Combining **Path Compression** (`parent[x] = Find(parent[x])`) with **Union by Rank** executes every `Find(x)` and `Union(x, y)` in \(O(\alpha(N))\); inverse Ackermann time, which is literally \(\le 4\) array lookups for any \(N\) in the observable universe[^sedgewick-alg]!
+- **Union-Find (Disjoint Set) and Minimum Spanning Trees (`Kruskal's`)**: To track dynamic connected components across $N$ nodes (or build a Minimum Spanning Tree by sorting edges by weight in **Kruskal's Algorithm** and adding edges that connect disjoint components), **Union-Find** maintains an array `parent[i]` and `rank[i]`. Combining **Path Compression** (`parent[x] = Find(parent[x])`) with **Union by Rank** executes every `Find(x)` and `Union(x, y)` in $O(\alpha(N))$; inverse Ackermann time, which is literally $\le 4$ array lookups for any $N$ in the observable universe[^sedgewick-alg]!
 
 ---
 
@@ -575,10 +575,10 @@ In **Atlas**, these data structures power three critical control-plane engines:
 
 ## Before you move on
 
-**Hash Tables** achieve \(O(1)\) average lookup via **Separate Chaining** (contiguous `buckets[] + entries[]` in .NET `Dictionary`) or **Open Addressing** (Linear Probing with **Tombstones** and **Robin Hood** PSL balancing), protected against \(O(N^2)\) hash-flooding DoS attacks by **randomized SipHash seeds**.
-**Binary and $d$-ary Heaps** pack a complete tree into a flat array (`2i+1`, `2i+2`), supporting \(O(\log N)\) `SiftUp`/`SiftDown`, \(O(N)\) bottom-up **Floyd's `Heapify`**, and \(O(N \log K)\) Top-$K$ streaming.
+**Hash Tables** achieve $O(1)$ average lookup via **Separate Chaining** (contiguous `buckets[] + entries[]` in .NET `Dictionary`) or **Open Addressing** (Linear Probing with **Tombstones** and **Robin Hood** PSL balancing), protected against $O(N^2)$ hash-flooding DoS attacks by **randomized SipHash seeds**.
+**Binary and $d$-ary Heaps** pack a complete tree into a flat array (`2i+1`, `2i+2`), supporting $O(\log N)$ `SiftUp`/`SiftDown`, $O(N)$ bottom-up **Floyd's `Heapify`**, and $O(N \log K)$ Top-$K$ streaming.
 For sorting, **IntroSort** (`QuickSort + HeapSort + InsertionSort`) dominates in-memory sorting, while **External $K$-Way Merge Sort** uses a Min-Heap over buffered file runs to sort multi-terabyte datasets in bounded RAM.
-On **Graphs**, **BFS** finds unweighted shortest paths, **3-color DFS** and **Kahn's In-Degree Queue** detect directed cycles and compute **Topological Sorts**, **Dijkstra / A\*** find non-negative weighted shortest paths, and **Union-Find** tracks dynamic connectivity in \(O(\alpha(N))\) time.
+On **Graphs**, **BFS** finds unweighted shortest paths, **3-color DFS** and **Kahn's In-Degree Queue** detect directed cycles and compute **Topological Sorts**, **Dijkstra / A\*** find non-negative weighted shortest paths, and **Union-Find** tracks dynamic connectivity in $O(\alpha(N))$ time.
 
 To test your understanding before moving to Module 21, analyze this changed case: suppose an engineer writes a directed cycle detector using standard DFS with a **single boolean `bool[] visited` array** (marking `visited[u] = true` when entering `u`, and returning `hasCycle = true` whenever an outgoing edge from `u` points to any neighbor `v` where `visited[v] == true`).
 Construct a 3-node Directed Acyclic Graph (`DAG`) where that algorithm **falsely reports a cycle**, and explain why distinguishing **`Visiting (On Current Recursion Stack)`** from **`Visited (Already Completed Backtracking)`** is mandatory for directed graphs.

@@ -100,13 +100,13 @@ Why is **Dense Vector Embedding Search (Semantic Search)** alone insufficient fo
 
 How do you combine ranked results from **Lexical Search (`BM25`)** and **Semantic Vector Search (`Cosine Similarity`)** when their raw scores live on completely incompatible numerical scales (`BM25` scores range from `0 to 45+` depending on query length, whereas `Cosine Similarity` ranges from `-1.0 to +1.0`)?
 You use **Reciprocal Rank Fusion (`RRF`, Cormack, Clarke, & Buettcher, 2009)**[^rrf-paper]:
-Instead of trying to normalize incompatible raw scores, RRF scores each candidate document \(d\) using only its **1-based rank position \(\text{rank}_m(d)\)** (`1, 2, 3, ...`) within each retrieval method \(m \in \{\text{Lexical}, \text{Semantic}, \text{Graph}\}\):
+Instead of trying to normalize incompatible raw scores, RRF scores each candidate document $d$ using only its **1-based rank position $\text{rank}_m(d)$** (`1, 2, 3, ...`) within each retrieval method $m \in \{\text{Lexical}, \text{Semantic}, \text{Graph}\}$:
 
-\[
+$$
 \text{RRF\_Score}(d) = \sum_{m \in M} \frac{1}{k + \text{rank}_m(d)}
-\]
+$$
 
-where \(k\) is a smoothing constant (standardly \(k = 60\)[^rrf-paper]).
+where $k$ is a smoothing constant (standardly $k = 60$[^rrf-paper]).
 Look at why **Reciprocal Rank Fusion (`RRF`)** is so effective in production RAG pipelines:
 1. **Zero Score-Calibration Fragility**: Because RRF depends only on ordinal ranks (`1st, 2nd, 3rd`), a noisy uncalibrated BM25 score of `82.4` cannot drown out a semantic match of `0.89`.
 2. **Consensus Boosting**: A document that ranks `#2` in Lexical BM25 (`1 / 62 = 0.0161`) *and* `#3` in Semantic Vector Search (`1 / 63 = 0.0158`) receives a combined RRF score of **`0.0320`**, beating a document that ranked `#1` in only one retriever (`1 / 61 = 0.0164`) and missed the other completely!
@@ -245,7 +245,7 @@ A Principal-grade **Specification-Driven Multi-Agent Workflow** coordinates agen
 1. **Living Specification and Dependency DAG (`Spec-Driven Development`)**:
    Before spawning implementation agents, you author a concise **Specification (`spec.md`)** and **Implementation Plan (`plan.md`)** defining the exact types, invariants, and non-goals, and decompose the work into a **Directed Acyclic Graph (`DAG`) of tasks** (`todos` + `todo_deps` in SQLite or `tasks.md` in Spec Kit, where dependent tasks remain blocked until their prerequisites are verified `done`, Module 20).
 2. **Isolated Git Worktree per Agent Session (`Zero Filesystem Contention`)**:
-   Every parallel coding agent or bounded experiment (`firstmate` / child project session) runs inside its own dedicated **Git Worktree (`git worktree add`)** on its own feature branch. Because each worktree has an independent filesystem directory while sharing the underlying `.git` object store in \(O(1)\) disk space, five agents can run `dotnet build`, `dotnet test`, and `dotnet format` simultaneously in complete isolation!
+   Every parallel coding agent or bounded experiment (`firstmate` / child project session) runs inside its own dedicated **Git Worktree (`git worktree add`)** on its own feature branch. Because each worktree has an independent filesystem directory while sharing the underlying `.git` object store in $O(1)$ disk space, five agents can run `dotnet build`, `dotnet test`, and `dotnet format` simultaneously in complete isolation!
 3. **Automated Verification Gates (`Build -> Test -> StyleFix -> XmlDoc -> Principal Review`)**:
    An agent task is never marked `done` merely because the LLM generated plausible-looking code. Every task must pass a deterministic verification pipeline: clean compilation with `TreatWarningsAsErrors`, 100% green classical state-based unit tests, automated style enforcement (`dotnet format` / `csharp-stylefix`), accurate API documentation (`csharp-xmldoc`), and a multi-lens **Principal Code Review** (`correctness`, `tests`, `naming`, `invariants`, `operational risk`).
 4. **Durable Session Checkpoints at Verified Boundaries**:

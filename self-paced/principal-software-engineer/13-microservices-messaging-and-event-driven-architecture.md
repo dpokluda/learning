@@ -16,11 +16,11 @@ The difference between a **synchronous message** and an **asynchronous message**
 - In a **synchronous interaction (Request / Response)**, the originating service sends a message and **blocks execution** (whether holding an OS thread or an `async/await` continuation critical to its caller's response) until it receives an immediate reply.
 - In an **asynchronous interaction**, the originating service emits a message announcing a command or a new fact about the world and **continues its work immediately without waiting for downstream consumers to finish**.
 
-Look at what happens mathematically when a bias toward synchronous RPCs creates a **deep service dependency tree** where an inbound request triggers \(k = 10\) synchronous downstream microservice calls, each with an independent `99.9%` availability SLA:
+Look at what happens mathematically when a bias toward synchronous RPCs creates a **deep service dependency tree** where an inbound request triggers $k = 10$ synchronous downstream microservice calls, each with an independent `99.9%` availability SLA:
 
-\[
+$$
 \text{End-to-End Availability} = 0.999^{10} \approx 0.99004 \quad (\text{nearly } 1\% \text{ failure rate; } 10\times \text{ worse than any single service!})
-\]
+$$
 
 Even worse, if Service 7 slows down due to a database lock, Services 1 through 6 all pile up waiting for responses, exhausting their thread and socket pools in a cascading failure.
 As Richard Rodger formulates the general architectural principle in *The Tao of Microservices*: **default to asynchronous messaging wherever the caller does not strictly require an immediate inline result to answer the user, and even when executing a synchronous request, consider also publishing an asynchronous event announcing the state change so future capabilities can plug in without modifying the sender**[^rodger-tao].
@@ -71,7 +71,7 @@ Look at the architectural leverage this buys you:
 
 When designing asynchronous message pipelines in the cloud, five structural patterns from the Azure Architecture Center and *Enterprise Integration Patterns* solve recurring production problems[^azure-messaging][^hohpe-eip]:
 
-1. **Queue-Based Load Leveling + Competing Consumers**: When 500,000 devices upload telemetry bursts at the top of the hour, pushing those writes synchronously into a database requires provisioning the database for peak burst capacity (\(10\times\) average cost). Placing a durable message queue in front of the worker tier buffers the spike (**Load Leveling**) while a pool of stateless worker instances (**Competing Consumers**) pulls messages from the queue at a steady, safe concurrency level that matches database capacity.
+1. **Queue-Based Load Leveling + Competing Consumers**: When 500,000 devices upload telemetry bursts at the top of the hour, pushing those writes synchronously into a database requires provisioning the database for peak burst capacity ($10\times$ average cost). Placing a durable message queue in front of the worker tier buffers the spike (**Load Leveling**) while a pool of stateless worker instances (**Competing Consumers**) pulls messages from the queue at a steady, safe concurrency level that matches database capacity.
 2. **Priority Queue**: During a heavy backlog of routine telemetry jobs, an urgent `HaltRollout` command cannot wait 20 minutes at the back of a FIFO queue. You implement a **Priority Queue** either using a broker that supports native priority ordering or (more reliably and without starvation in cloud brokers) by provisioning **separate queues per priority tier** (`rollout-commands-p0-high`, `rollout-commands-p1-normal`, `telemetry-p2-low`) with dedicated worker pools (or workers that poll `p0` before `p1`).
 3. **Sequential Convoy**: Standard Competing Consumers process messages in parallel out of order: if Device `D-100` sends `1. Provisioned`, `2. FirmwareUpdated`, and `3. Decommissioned`, three different workers might pick up those three messages concurrently and process `3. Decommissioned` *before* `1. Provisioned`! The **Sequential Convoy Pattern** groups related messages by a **Session ID / Partition Key** (`DeviceId = D-100`) and locks that session to a single consumer at a time (or routes that key to a single Kafka partition), guaranteeing **strict FIFO ordering per device** while still processing thousands of *different* devices in parallel across the worker fleet[^azure-messaging].
 4. **Claim Check Pattern**: Message brokers (Kafka, Service Bus, SQS, RabbitMQ) are designed for small control messages (`1 KB` to `256 KB`), not 50 MB diagnostic crash dumps or firmware images. Sending multi-megabyte blobs through a message bus bloats broker memory, slows replication, and hits hard frame limits. In the **Claim Check Pattern**, the producer uploads the large payload directly to a scalable object/blob store (S3 / Azure Blob Storage), receives a unique storage key (**the Claim Check URI**), and publishes a tiny 200-byte message containing only that Claim Check reference; the consumer fetches the blob directly from storage when ready[^hohpe-eip][^azure-messaging].
@@ -105,9 +105,9 @@ The **Transactional Outbox Pattern** solves the Dual-Write bug deterministically
 
 ### Saga Distributed Transactions: Choreography vs Orchestration
 
-When a business workflow spans multiple microservices (`1. Reserve Budget` -> `2. Validate Firmware Signature` -> `3. Provision CDN Distribution` -> `4. Activate Rollout`), we model it as a **Saga** (originally introduced by Garcia-Molina and Salem in 1987)[^saga-1987][^azure-messaging]: a sequence of **local transactions** \(T_1, T_2, \dots, T_n\), where each step commits locally and publishes a message to trigger the next step.
-Because steps \(T_1\) and \(T_2\) have already committed their local database transactions (releasing their row locks immediately!), if step \(T_3\) fails, you cannot use a database `ROLLBACK`.
-Instead, the Saga executes **Compensating Transactions** in reverse order (\(C_2\), then \(C_1\)) that **semantically undo** the work already committed (for example, `ReleaseReservedBudget`)!
+When a business workflow spans multiple microservices (`1. Reserve Budget` -> `2. Validate Firmware Signature` -> `3. Provision CDN Distribution` -> `4. Activate Rollout`), we model it as a **Saga** (originally introduced by Garcia-Molina and Salem in 1987)[^saga-1987][^azure-messaging]: a sequence of **local transactions** $T_1, T_2, \dots, T_n$, where each step commits locally and publishes a message to trigger the next step.
+Because steps $T_1$ and $T_2$ have already committed their local database transactions (releasing their row locks immediately!), if step $T_3$ fails, you cannot use a database `ROLLBACK`.
+Instead, the Saga executes **Compensating Transactions** in reverse order ($C_2$, then $C_1$) that **semantically undo** the work already committed (for example, `ReleaseReservedBudget`)!
 
 ```
 Saga Orchestration (Central State Machine):              Saga Choreography (Decentralized Events):

@@ -26,7 +26,7 @@ Every cloud-scale platform consists of two fundamentally different operational p
 | **Target SLA** | `99.9%` (`43.8 min/month` downtime budget). | `99.99%` to `99.999%` (`4.38 min` to `26 sec/month`). |
 
 Look closely at the bottom two rows of that table.
-By the **Multiplication Rule of Sequential Dependencies** from Module 13 (\(A_{\text{total}} = \prod_{i=1}^k a_i\)), it is **mathematically impossible** for a Data Plane with a `99.999%` availability target to make synchronous runtime calls to a Control Plane with a `99.9%` availability target!
+By the **Multiplication Rule of Sequential Dependencies** from Module 13 ($A_{\text{total}} = \prod_{i=1}^k a_i$), it is **mathematically impossible** for a Data Plane with a `99.999%` availability target to make synchronous runtime calls to a Control Plane with a `99.9%` availability target!
 If the Data Plane queries the Control Plane's central database (or awaits a synchronous RPC response from a Control Plane microservice) on the hot path, the Data Plane's effective availability drops to at most `99.9%`.
 
 ### The Principle of Static Stability
@@ -85,13 +85,13 @@ REGIONAL DATA PLANE STAMP / CELL (Autonomous Execution Unit, 99.999% SLA)
 Trace how the four components of this pattern work together to close every failure window:
 
 1. **Periodic Full Snapshots (Fast Cold-Start Baseline)**:
-   Every \(T_{\text{snap}}\) hours (for example, once every 6 or 24 hours, or after every 50,000 mutations), a background compaction worker reads the consistent state of all active policies at monotonic sequence number \(V_{\text{snap}}\) (`Version = 10,400`), serializes them into a compact, checksummed binary or columnar snapshot blob (`snapshot-v10400.bin`), and replicates that immutable blob into each Data Plane stamp's **local object storage**.
+   Every $T_{\text{snap}}$ hours (for example, once every 6 or 24 hours, or after every 50,000 mutations), a background compaction worker reads the consistent state of all active policies at monotonic sequence number $V_{\text{snap}}$ (`Version = 10,400`), serializes them into a compact, checksummed binary or columnar snapshot blob (`snapshot-v10400.bin`), and replicates that immutable blob into each Data Plane stamp's **local object storage**.
 2. **Incremental Change Queue / Feed (Sub-Second Convergence)**:
-   Whenever an administrator creates, updates, or deletes a policy in the Control Plane DB, the **Transactional Outbox** (Module 13) assigns the mutation a strictly increasing monotonic version \(V\) (`10,401`, `10,402`, ...) and pushes a compact `PolicyDeltaEvent` to each stamp's **local change queue** (such as a stamp-local Kafka topic, Azure Storage Queue, or Service Bus queue with a 7-day retention window).
+   Whenever an administrator creates, updates, or deletes a policy in the Control Plane DB, the **Transactional Outbox** (Module 13) assigns the mutation a strictly increasing monotonic version $V$ (`10,401`, `10,402`, ...) and pushes a compact `PolicyDeltaEvent` to each stamp's **local change queue** (such as a stamp-local Kafka topic, Azure Storage Queue, or Service Bus queue with a 7-day retention window).
 3. **Deterministic Hydration and Monotonic Version Reconciliation**:
    When a Data Plane worker pod boots up inside a stamp (even during a complete Control Plane outage!):
    - It reads the latest full snapshot (`V_snap = 10,400`) from **stamp-local blob storage** in milliseconds.
-   - It tails the **stamp-local change queue** from offset/version \(V > 10{,}400\), applying each incremental `Upsert` or `Delete` event whose `EventVersion` is strictly greater than the entity's current version (`entity.Version < delta.Version`, ensuring idempotence even if the queue delivers duplicate or slightly overlapping delta events around the snapshot boundary!).
+   - It tails the **stamp-local change queue** from offset/version $V > 10{,}400$, applying each incremental `Upsert` or `Delete` event whose `EventVersion` is strictly greater than the entity's current version (`entity.Version < delta.Version`, ensuring idempotence even if the queue delivers duplicate or slightly overlapping delta events around the snapshot boundary!).
 4. **Pre-Compilation and Atomic Reference Swapping**:
    Rather than parsing JSON strings or compiling policy expressions during customer requests, the background hydration loop **pre-compiles every rule into an immutable in-memory AST or lookup table** and publishes the new state snapshot via a single atomic reference swap (`Volatile.Write(ref _activeCatalog, nextCatalog)`).
    Active reader threads on the hot path read `_activeCatalog` with **zero locks, zero garbage-collection contention, and zero external network calls**.
@@ -227,7 +227,7 @@ Instead of scaling a region **up/out into one giant cluster**, you partition the
 ```
 
 Every Cell is a complete, cookie-cutter miniature deployment of the Data Plane with four strict engineering invariants:
-1. **Zero Cross-Cell State Sharing**: Cell 01 and Cell 02 share **nothing** at runtime: no shared Redis cluster, no shared database pool, no shared message queue, and no cross-cell RPCs. If Cell 01 catches fire due to a toxic workload, its blast radius is mathematically capped at \(\frac{1}{C}\) of the region (for \(C = 20\) cells, `95%` of the region is completely untouched!).
+1. **Zero Cross-Cell State Sharing**: Cell 01 and Cell 02 share **nothing** at runtime: no shared Redis cluster, no shared database pool, no shared message queue, and no cross-cell RPCs. If Cell 01 catches fire due to a toxic workload, its blast radius is mathematically capped at $\frac{1}{C}$ of the region (for $C = 20$ cells, `95%` of the region is completely untouched!).
 2. **Fixed Maximum Cell Capacity (Tested Scale Ceiling)**: You load-test a single Cell up to a hard, known capacity ceiling (for example, `50,000 RPS` or `2,500 tenants`). You **never scale a single Cell beyond its tested ceiling**; when regional demand grows by 20%, you simply stamp out `Cell 21`, `Cell 22`, `Cell 23` using identical Infrastructure-as-Code templates!
 3. **Canary Deployment Progression by Cell**: Software and configuration rollouts never deploy to an entire region at once; they progress **one Cell at a time** (`Canary Cell 00 -> Cell 01 -> Cells 02..05 -> All Cells`), baking health metrics between cells (Module 26).
 4. **Thin, Stateless Cell Routing Layer**: A lightweight, stateless routing layer at the regional edge maps each incoming `TenantId` (or `AccountId`) to its assigned `CellId` via a cached directory table or consistent hash ring.
@@ -235,20 +235,20 @@ Every Cell is a complete, cookie-cutter miniature deployment of the Data Plane w
 ### Combinatorial Blast-Radius Reduction via Shuffle Sharding
 
 What if your service cannot afford dedicated single-tenant cells for thousands of small tenants, yet a single rogue or compromised client sending a "poison pill" request can crash whichever worker node receives its request?
-In a standard load-balanced cell of \(N = 100\) worker nodes where every tenant can hit any node, a retrying poison-pill client quickly crashes all 100 nodes (`100%` outage).
-If you divide the 100 nodes into 25 simple bulkheads of 4 nodes each, a poison pill still takes down \(\frac{1}{25} = 4\%\) of all tenants sharing that bulkhead.
+In a standard load-balanced cell of $N = 100$ worker nodes where every tenant can hit any node, a retrying poison-pill client quickly crashes all 100 nodes (`100%` outage).
+If you divide the 100 nodes into 25 simple bulkheads of 4 nodes each, a poison pill still takes down $\frac{1}{25} = 4\%$ of all tenants sharing that bulkhead.
 
 Now apply **Shuffle Sharding** (introduced briefly in Module 12 and analyzed here mathematically)[^aws-shuffle]:
-Assign each tenant a deterministic, pseudo-random **virtual shard of $k = 4$ worker nodes** chosen out of the pool of \(N = 100\) nodes using $k$ independent hashes of `TenantId`:
-- If a poison-pill tenant crashes all \(k = 4\) of its assigned nodes, another tenant experiences a complete outage **if and only if all 4 of its assigned nodes happen to be the exact same 4 nodes**!
+Assign each tenant a deterministic, pseudo-random **virtual shard of $k = 4$ worker nodes** chosen out of the pool of $N = 100$ nodes using $k$ independent hashes of `TenantId`:
+- If a poison-pill tenant crashes all $k = 4$ of its assigned nodes, another tenant experiences a complete outage **if and only if all 4 of its assigned nodes happen to be the exact same 4 nodes**!
 - How many distinct 4-node subsets exist in a 100-node pool? By the binomial coefficient:
-  \[
+  $$
   \binom{N}{k} = \binom{100}{4} = \frac{100 \times 99 \times 98 \times 97}{4 \times 3 \times 2 \times 1} = \mathbf{3{,}921{,}225 \text{ virtual shards!}}
-  \]
+  $$
 - Even if we account for partial overlap (where healthy tenants can route around 1, 2, or 3 failed nodes using client/router retry across their 4 assigned endpoints), the fraction of other tenants who lose all 4 of their endpoints simultaneously is:
-  \[
+  $$
   P(\text{Complete Co-Tenant Outage}) = \frac{1}{\binom{100}{4}} \approx \mathbf{0.0000255\%} \quad (\text{a } \mathbf{156{,}000\times} \text{ reduction in blast radius over simple partitioning!})
-  \]
+  $$
 
 ---
 
@@ -312,7 +312,7 @@ From the single authoritative OpenAPI / TypeSpec definition, you generate and sh
 In **Atlas**, these patterns form the structural backbone of our regional fleet:
 - **Zero-Dependency Stamp Data Plane for Policy & Rollout Evaluation**: Atlas's central Control Plane allows tenants to author complex deployment policies and governance rules via REST APIs and multi-language SDKs (`C#`, `Python`, `Java`, `TypeScript`, `Go`). Those rules are compacted into hourly immutable **Baseline Snapshot Blobs** and streamed in real time via per-stamp **Incremental Change Queues**. Even if the central Control Plane is taken offline for a 4-hour global database upgrade, every regional Data Plane stamp continues evaluating device syncs and enforcing security policies at `1.5M RPS` from its pre-compiled in-memory catalog (`99.999%` availability).
 - **Cell-Based Regional Stamps (`50M Devices per Stamp`)**: Rather than running one monolithic cluster per geography, Atlas deploys 10 independent **Stamps (Cells)** across North America, Europe, and Asia. Each stamp has a hard capacity ceiling of `50 million devices` and `500,000 peak RPS`, with its own isolated Envoy gateways, Kafka brokers, Redis cache shards, and Cassandra ring.
-- **Shuffle Sharding inside the Gateway Tier**: Within each stamp's 80-node API gateway pool, each tenant ID is shuffle-sharded onto $k = 4$ gateway endpoints (\(\binom{80}{4} = 1{,}581{,}580\) virtual shards), ensuring that a malformed firmware-status flood from one malfunctioning tenant fleet can degrade at most 4 gateway nodes while `99.9999%` of co-tenants experience zero packet loss.
+- **Shuffle Sharding inside the Gateway Tier**: Within each stamp's 80-node API gateway pool, each tenant ID is shuffle-sharded onto $k = 4$ gateway endpoints ($\binom{80}{4} = 1{,}581{,}580$ virtual shards), ensuring that a malformed firmware-status flood from one malfunctioning tenant fleet can degrade at most 4 gateway nodes while `99.9999%` of co-tenants experience zero packet loss.
 
 ---
 
@@ -320,7 +320,7 @@ In **Atlas**, these patterns form the structural backbone of our regional fleet:
 
 High-scale cloud platforms achieve `99.999%` runtime availability by enforcing a hard wall between the **Control Plane** (low-QPS, strongly consistent `PC/EC` resource management and orchestration) and the **Data Plane** (high-QPS, ultra-low-latency `PA/EL` execution with **Static Stability**).
 Using the **Zero-Dependency Stamp Data Plane pattern**, each Data Plane cell hydrates its in-memory evaluation catalog from a **stamp-local Periodic Full Snapshot** plus a **stamp-local Incremental Change Queue**, reconciling overlapping events via **monotonic version guards** so cold-starting pods never query the central Control Plane.
-Regionally, **Cell-Based (Deployment Stamp) architectures** bound the blast radius of any infrastructure failure to \(\frac{1}{C}\) of the fleet, while **Shuffle Sharding** assigns each tenant $k$ out of $N$ workers to shrink co-tenant blast radius combinatorially by \(\binom{N}{k}\).
+Regionally, **Cell-Based (Deployment Stamp) architectures** bound the blast radius of any infrastructure failure to $\frac{1}{C}$ of the fleet, while **Shuffle Sharding** assigns each tenant $k$ out of $N$ workers to shrink co-tenant blast radius combinatorially by $\binom{N}{k}$.
 Externally, the Control Plane exposes a versioned, contract-first **OpenAPI** surface using **`Idempotency-Key`**, **`HTTP 202 Accepted` + `Operation-Location` + `Retry-After`** for Long-Running Operations, and **continuation-token pagination**, wrapped in idiomatic multi-language SDKs.
 
 To test your mastery before moving to Module 23, work through this changed scenario: suppose your stamp's background snapshot job writes `snapshot-v500.parquet` at `12:00:00 UTC`, but because the incremental change queue is asynchronous, the queue consumer on a newly booted Data Plane pod sees the following sequence of delta events from the queue:

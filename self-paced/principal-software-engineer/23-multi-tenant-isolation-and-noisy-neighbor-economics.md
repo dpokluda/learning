@@ -7,7 +7,7 @@ Multi-tenancy unlocks massive economies of scale by multiplexing spiky tenant wo
 2. **Multi-Tenant Fan-Out Amplification on Ingestion Pipelines**: When a streaming telemetry pipeline naively mixes events from hundreds of tenants inside the same micro-batch blob and then splits them out to per-tenant storage partitions, random I/O and lock contention can collapse throughput by **87% or more**.
 3. **Noisy-Neighbor Starvation**: Without stratified admission control and fair scheduling, a single mega-tenant triggering a bulk compliance scan or retry storm can exhaust shared worker queues and starve 10,000 smaller tenants.
 
-This module examines the **four-tier Multi-Tenancy Isolation Spectrum** (including **Customer-Hosted Compute & Storage via Managed Resource Groups**), **cross-boundary identity delegation**, the **quantitative physics of Multi-Tenant Fan-Out Amplification** (and how Claim-Check batching and tenant-tier routing achieve a **\(78\times\) throughput speedup**), and **Noisy-Neighbor defense via stratified token buckets and weighted fair queuing**.
+This module examines the **four-tier Multi-Tenancy Isolation Spectrum** (including **Customer-Hosted Compute & Storage via Managed Resource Groups**), **cross-boundary identity delegation**, the **quantitative physics of Multi-Tenant Fan-Out Amplification** (and how Claim-Check batching and tenant-tier routing achieve a **$78\times$ throughput speedup**), and **Noisy-Neighbor defense via stratified token buckets and weighted fair queuing**.
 
 > **Prerequisite:** [Module 08: Data Partitioning and Hashing Schemes](./08-data-partitioning-and-hashing-schemes.md), [Module 12: Rate Limiting, Throttling, and Resiliency](./12-rate-limiting-throttling-and-resiliency.md), and [Module 22: Control Plane vs Data Plane and Cell-Based Architectures](./22-control-plane-vs-data-plane-and-cell-architectures.md).
 
@@ -84,7 +84,7 @@ Three mechanisms make cross-boundary orchestration secure and resilient:
 ## 3. Quantifying multi-tenant fan-out amplification (and the $78\times$ throughput architecture)
 
 Even when you use a shared or pod-partitioned ingestion pipeline (Tiers 1 and 2) to ingest high-volume telemetry or audit logs before landing them in per-tenant storage partitions, a subtle **Multi-Tenant Fan-Out Trap** can destroy your throughput.
-Let us walk through the exact production math from a high-scale multi-tenant telemetry pipeline to see why naive micro-batching collapses under multi-tenant skew, and how to re-architect it for a **\(78\times\) throughput gain (`1.3 MB/s -> 102.2 MB/s`)**[^ddia-ch10][^kleppmann-logs]:
+Let us walk through the exact production math from a high-scale multi-tenant telemetry pipeline to see why naive micro-batching collapses under multi-tenant skew, and how to re-architect it for a **$78\times$ throughput gain (`1.3 MB/s -> 102.2 MB/s`)**[^ddia-ch10][^kleppmann-logs]:
 
 ### The Physics of the 87% Multi-Tenant Fan-Out Throughput Collapse
 
@@ -92,10 +92,10 @@ Suppose your ingestion pipeline receives raw compressed telemetry blobs (each `~
 - **Scenario A (Single-Tenant / Pre-Grouped Blob)**: An incoming `20 MB` blob contains events belonging to **1 single mega-tenant**. The worker parses the 20 MB stream in memory, compresses one contiguous `20 MB` columnar output block, and performs **1 single sequential blob write (`1 I/O operation`)** to `/tenant=T1/...`. Throughput is high (`~15.4 MB/s` per single-threaded worker).
 - **Scenario B (Mixed Multi-Tenant Blob with 200 Tenants)**: Now an incoming `20 MB` blob contains interleaved events spanning **$M = 200$ distinct small and medium tenants** (`~100 KB` per tenant on average).
   Look at what happens inside a naive worker that processes that single blob and flushes per tenant:
-  1. **\(200\times\) Write / Metadata I/O Amplification**: Instead of 1 sequential `20 MB` object-store commit, the worker must open, write, and commit **200 separate `100 KB` output files** across 200 different tenant directory paths! Because every cloud object-store `PutBlob / Flush` call carries a fixed network and metadata-transaction latency overhead \(T_{\text{meta}} \approx 15\text{--}40\text{ ms}\), committing 200 tiny files adds:
-     \[
+  1. **$200\times$ Write / Metadata I/O Amplification**: Instead of 1 sequential `20 MB` object-store commit, the worker must open, write, and commit **200 separate `100 KB` output files** across 200 different tenant directory paths! Because every cloud object-store `PutBlob / Flush` call carries a fixed network and metadata-transaction latency overhead $T_{\text{meta}} \approx 15\text{--}40\text{ ms}$, committing 200 tiny files adds:
+     $$
      200 \times 25\text{ ms} = \mathbf{5{,}000\text{ ms (5 full seconds of pure network/metadata wait time per blob!)}}
-     \]
+     $$
   2. **Memory Fragmentation & GC Thrashing**: Maintaining 200 concurrent in-memory compression buffers and string dictionaries simultaneously overflows L2/L3 CPU caches and forces buffers onto the .NET **Large Object Heap (`LOH`, $\ge 85{,}000$ bytes)**, triggering stop-the-world Generation-2 garbage collections.
   3. **Partition Lock Contention**: If 32 worker pods all process mixed blobs containing events for the same 200 tenants simultaneously, all 32 pods contend on the exact same per-tenant output partitions!
 
@@ -132,15 +132,15 @@ By combining three systems engineering techniques:
 ```
 
 1. **Claim-Check Byte-Range Splitting (Parallelizing Multi-Part Ingestion)**:
-   Instead of passing multi-megabyte payloads through the message bus or letting a single thread chew through a giant blob sequentially, the ingestion coordinator writes (or references) the raw multi-part blob in object storage and emits lightweight **Claim-Check descriptors** (`{BlobUri, PartIndex, ByteOffset, ByteLength}`) onto a partitioned work queue so \(P\) parallel workers can stream and decompress independent byte ranges concurrently.
+   Instead of passing multi-megabyte payloads through the message bus or letting a single thread chew through a giant blob sequentially, the ingestion coordinator writes (or references) the raw multi-part blob in object storage and emits lightweight **Claim-Check descriptors** (`{BlobUri, PartIndex, ByteOffset, ByteLength}`) onto a partitioned work queue so $P$ parallel workers can stream and decompress independent byte ranges concurrently.
 2. **Tenant-Tier Routing & Shuffle Coalescing (Amortizing Per-Tenant Flush Overhead)**:
    Rather than letting every worker immediately flush tiny `100 KB` fragments for 200 tenants after every input blob, workers partition events by `Hash(TenantId) % PartitionCount` and accumulate events in a **bounded in-memory Tenant Batch Coalescer** across multiple input blobs!
-   A tenant partition is flushed to object storage **only when its accumulated buffer reaches a target size threshold \(B_{\text{min}}\) (for example, `8 MB` to `32 MB`) OR a maximum staleness deadline \(T_{\max}\) (for example, `60 seconds`) elapses**.
+   A tenant partition is flushed to object storage **only when its accumulated buffer reaches a target size threshold $B_{\text{min}}$ (for example, `8 MB` to `32 MB`) OR a maximum staleness deadline $T_{\max}$ (for example, `60 seconds`) elapses**.
    Look at the math: coalescing across 80 input blobs turns eighty `100 KB` flushes (80 metadata round trips) into **one single `8 MB` sequential flush (1 metadata round trip)**, eliminating `98.7%` of object-store I/O calls!
 3. **Zero-Allocation `ArrayPool<byte>` / `RecyclableMemoryStream` Buffer Management**:
    Instead of allocating `new byte[]` buffers for every tenant batch (which hammers the .NET Large Object Heap), workers rent fixed slabs from `ArrayPool<byte>.Shared` and return them immediately after the flush completes, keeping Generation-2 GC pauses near zero.
 
-Combining Claim-Check parallel multi-part splitting, tenant-shuffled batch coalescing, and pooled memory raised measured pipeline throughput from **`1.3 MB/s` to `102.2 MB/s` (a \(78.6\times\) speedup)** while maintaining sub-minute latency SLAs!
+Combining Claim-Check parallel multi-part splitting, tenant-shuffled batch coalescing, and pooled memory raised measured pipeline throughput from **`1.3 MB/s` to `102.2 MB/s` (a $78.6\times$ speedup)** while maintaining sub-minute latency SLAs!
 
 ---
 
@@ -254,7 +254,7 @@ In **Atlas**, all four isolation and scheduling mechanisms work in concert:
 
 Multi-tenant architecture balances **unit-cost efficiency** against **blast-radius, security, and performance isolation**.
 Across the **Multi-Tenancy Isolation Spectrum**, systems progress from **Shared Pool (`TenantId` column)** to **Stamp/Pod-Partitioned**, **Provider-Hosted Silo**, and **Customer-Hosted Compute & Storage (`Managed Resource Group / BYOS`)**, where the SaaS Control Plane orchestrates customer-owned storage and containerized evaluators inside the customer's subscription via **delegated Managed Identities** and **asynchronous `HTTP 202` reconciliation sagas**.
-On high-throughput data planes, ingesting mixed-tenant blobs (`200 tenants/blob`) and flushing per tenant causes an **87% throughput collapse** due to \(200\times\) object-store metadata round trips and memory fragmentation; combining **Claim-Check multi-part splitting**, **in-memory tenant batch coalescing (size or time threshold)**, and **`ArrayPool<byte>` buffer pooling** restores sequential I/O and delivers a **\(78\times\) throughput gain**.
+On high-throughput data planes, ingesting mixed-tenant blobs (`200 tenants/blob`) and flushing per tenant causes an **87% throughput collapse** due to $200\times$ object-store metadata round trips and memory fragmentation; combining **Claim-Check multi-part splitting**, **in-memory tenant batch coalescing (size or time threshold)**, and **`ArrayPool<byte>` buffer pooling** restores sequential I/O and delivers a **$78\times$ throughput gain**.
 Finally, **Stratified Tenant Tiers**, **per-tenant Token Buckets**, and **Deficit Round-Robin (`DRR`)** scheduling prevent Pareto mega-tenants from starving smaller tenants.
 
 To test your intuition before moving to Module 24, calculate this concrete fan-out trade-off: suppose a stream processor ingests `10 MB` mixed blobs where each blob contains events for `250 tenants` (`40 KB` per tenant per blob), and each cloud object-store `FlushBlob` operation has a fixed metadata latency overhead of `20 ms` plus a sequential transfer speed of `500 MB/s`.

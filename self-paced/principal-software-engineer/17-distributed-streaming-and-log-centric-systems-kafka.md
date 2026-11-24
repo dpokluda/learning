@@ -72,8 +72,8 @@ When a consumer instance joins or crashes (detected via missed heartbeats to the
 ## 3. Replication, In-Sync Replicas (ISR), High-Water Mark, and Leader Epoch
 
 How does Kafka guarantee that acknowledged messages are never lost when a broker's disk dies?
-Each Partition is replicated across \(N\) brokers (the replication factor, typically \(N = 3\)) using a **Leader-Follower** model[^kafka-docs][^joshi-pds]:
-- Exactly one broker is elected as the **Partition Leader**, and the remaining \(N - 1\) brokers act as **Followers**.
+Each Partition is replicated across $N$ brokers (the replication factor, typically $N = 3$) using a **Leader-Follower** model[^kafka-docs][^joshi-pds]:
+- Exactly one broker is elected as the **Partition Leader**, and the remaining $N - 1$ brokers act as **Followers**.
 - All producer writes (and classically all consumer reads, though modern Kafka also supports **Follower Fetching** from the closest rack replica to save cross-AZ bandwidth) go to the Partition Leader.
 - Followers replicate by acting like ordinary Kafka consumers: they send sequential `FetchRequest`s to the Leader and append the received batches to their own local segmented WAL in exact offset order.
 

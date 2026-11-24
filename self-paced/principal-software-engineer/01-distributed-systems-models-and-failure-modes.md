@@ -82,17 +82,17 @@ Every stateful protocol in this book assumes the **crash-recovery** model unless
 Why can we not simply wait long enough to be 100% certain that an unresponsive node has crashed?
 The answer depends on the **synchrony model** of the system[^ddia-ch8][^dwork-partial-sync]:
 
-1. **Synchronous model**: Every message latency is strictly bounded by a known constant \(\Delta\), and every node executes instructions within a known clock drift bound \(\Phi\). If you send a ping and do not receive a reply within \(2\Delta + \Phi\), the remote node is guaranteed to be dead. Hard real-time avionics buses approximate this model, but commodity cloud networks over TCP/IP never do.
-2. **Asynchronous model**: Messages can be delayed arbitrarily long, and nodes can pause execution for arbitrary durations. There is no upper bound \(\Delta\) on message delivery or processing speed.
-3. **Partially synchronous model**: The system behaves like a synchronous system (messages arrive within \(\Delta\) and processes run at normal speed) *most of the time*, but it can unpredictably flip into asynchronous behavior for finite, unknown periods (during network congestion, routing convergence, or GC pauses) before eventually returning to synchrony after some unknown Global Stabilization Time (GST)[^dwork-partial-sync].
+1. **Synchronous model**: Every message latency is strictly bounded by a known constant $\Delta$, and every node executes instructions within a known clock drift bound $\Phi$. If you send a ping and do not receive a reply within $2\Delta + \Phi$, the remote node is guaranteed to be dead. Hard real-time avionics buses approximate this model, but commodity cloud networks over TCP/IP never do.
+2. **Asynchronous model**: Messages can be delayed arbitrarily long, and nodes can pause execution for arbitrary durations. There is no upper bound $\Delta$ on message delivery or processing speed.
+3. **Partially synchronous model**: The system behaves like a synchronous system (messages arrive within $\Delta$ and processes run at normal speed) *most of the time*, but it can unpredictably flip into asynchronous behavior for finite, unknown periods (during network congestion, routing convergence, or GC pauses) before eventually returning to synchrony after some unknown Global Stabilization Time (GST)[^dwork-partial-sync].
 
 In 1985, Fischer, Lynch, and Paterson proved one of the most consequential theorems in computer science, known as the **FLP Impossibility Result**[^flp-1985]:
 > In a purely **asynchronous** network model, no **deterministic** consensus protocol can guarantee both **safety** (never deciding conflicting values) and **liveness** (eventually reaching a decision) if even a **single node** is allowed to crash.
 
 The intuition behind FLP is straightforward once you see it from a node's perspective.
-In an asynchronous network, a node waiting for a vote from peer \(X\) has no way to tell whether \(X\) has crashed permanently or whether \(X\)'s packets are merely delayed by a slow router.
-If the protocol waits forever for \(X\), it violates **liveness** when \(X\) is truly dead.
-If the protocol gives up waiting and decides without \(X\), it risks violating **safety** if \(X\) is still alive on the other side of a delay and deciding a different value.
+In an asynchronous network, a node waiting for a vote from peer $X$ has no way to tell whether $X$ has crashed permanently or whether $X$'s packets are merely delayed by a slow router.
+If the protocol waits forever for $X$, it violates **liveness** when $X$ is truly dead.
+If the protocol gives up waiting and decides without $X$, it risks violating **safety** if $X$ is still alive on the other side of a delay and deciding a different value.
 
 Modern production consensus protocols (Paxos, Raft, Zab) escape the FLP trap by targeting the **partially synchronous model**[^ongaro-raft][^lamport-paxos].
 They guarantee **safety unconditionally** (even when the network is completely asynchronous, messages are delayed for hours, and clocks are wildly wrong, the system will never commit contradictory state), while guaranteeing **liveness conditionally** (as soon as the network enters a synchronous window long enough for a round of heartbeats and votes to complete within the election timeout, the cluster makes progress).
@@ -123,12 +123,12 @@ Reliability is achieved through **redundancy** (duplicating critical hardware an
 ### Tail latency amplification
 
 In a horizontally scaled microservice architecture, average latency (`p50`) is an almost useless metric; **tail latency (`p99` and `p99.9`) governs user experience and system stability**[^dean-barroso-tail].
-Suppose a user request hits an aggregator service that must fan out in parallel to \(k = 50\) backend shards, and each shard independently experiences a 1% chance (`p99`) of taking longer than 500 ms due to a minor GC pause or disk queue spike.
+Suppose a user request hits an aggregator service that must fan out in parallel to $k = 50$ backend shards, and each shard independently experiences a 1% chance (`p99`) of taking longer than 500 ms due to a minor GC pause or disk queue spike.
 Because the aggregator cannot return until the *slowest* of the 50 parallel calls completes, the probability that the overall request avoids the 500 ms tail spike on *all* 50 shards is:
 
-\[
+$$
 P(\text{all 50 fast}) = (1 - 0.01)^{50} = 0.99^{50} \approx 0.605
-\]
+$$
 
 Consequently, the probability that the user sees a slow (>500 ms) response jumps from **1% at the shard level to nearly 40% (`1 - 0.605 = 39.5%`) at the gateway level**.
 Principal engineers design specifically to bound tail amplification by minimizing synchronous fan-out depth, co-locating related data in the same partition, and using hedged requests or bounded timeouts.

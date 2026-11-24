@@ -20,9 +20,9 @@ Chang et al. open the BigTable paper with one sentence that every Principal engi
 
 The map is indexed by a **row key**, a **column key**, and a **64-bit integer timestamp**, mapping to an uninterpreted array of bytes:
 
-\[
+$$
 (\text{row}: \texttt{string}, \;\text{column}: \texttt{string}, \;\text{time}: \texttt{int64}) \longrightarrow \texttt{byte[]}
-\]
+$$
 
 ### Data Model: Row Keys, Tablets, Column Families, and Timestamps
 
@@ -50,9 +50,9 @@ BigTable uses a brilliant **three-level B+Tree-like location hierarchy** rooted 
 
 Let us do the capacity math from Section 5.1 of the BigTable paper[^bigtable-2006]:
 - Each `METADATA` row is ~1 KB in size and points to one User Tablet.
-- Limiting each `METADATA` tablet to a modest `128 MB` allows a single `METADATA` tablet to address \(2^{17} = 131{,}072\) User Tablets.
-- Because the **Root Tablet** (Level 1) is also a `128 MB` `METADATA` tablet that never splits, the Root Tablet can point to \(2^{17}\) Level-2 `METADATA` tablets, which together address **\(2^{34} \approx 17\text{ billion User Tablets}\)**.
-- At `128 MB` per User Tablet, this 3-level hierarchy addresses **\(2^{61}\text{ bytes}\) (2 Exabytes) of data** in at most **3 network round trips**; and because the BigTable Client Library caches `METADATA` tablet locations aggressively in RAM, almost all lookups take **0 location round trips**!
+- Limiting each `METADATA` tablet to a modest `128 MB` allows a single `METADATA` tablet to address $2^{17} = 131{,}072$ User Tablets.
+- Because the **Root Tablet** (Level 1) is also a `128 MB` `METADATA` tablet that never splits, the Root Tablet can point to $2^{17}$ Level-2 `METADATA` tablets, which together address **$2^{34} \approx 17\text{ billion User Tablets}$**.
+- At `128 MB` per User Tablet, this 3-level hierarchy addresses **$2^{61}\text{ bytes}$ (2 Exabytes) of data** in at most **3 network round trips**; and because the BigTable Client Library caches `METADATA` tablet locations aggressively in RAM, almost all lookups take **0 location round trips**!
 
 ### Tablet Server Internals: Why BigTable Needs Zero Data Copying on Failover
 
@@ -88,8 +88,8 @@ Dynamo achieved its **"always-writable" (`PA / EL`), zero-master** design by com
 ```
 
 1. **Partitioning via Consistent Hashing with Virtual Nodes (Module 08)**: There is no central Master and no Chubby location table. Nodes and keys map onto a **128-bit MD5 Consistent Hash Ring**, where each physical machine owns multiple **Virtual Nodes (tokens)** based on hardware capacity.
-2. **Membership and Routing via Gossip (`O(1)` Routing)**: Every node gossips ring membership changes with random peers every second so every node holds a full copy of the token ring in memory. A client can send a `get(key)` or `put(key, context, value)` to any node in the key's **Preference List** (the top \(N\) distinct physical nodes walking clockwise around the ring) or through a load balancer; the receiving node acts as the **Coordinator** for that request.
-3. **Replication via Tunable Quorums (`R + W > N`, Module 03)**: Normally, the Coordinator sends writes to the top \(N\) healthy nodes in the key's Preference List and waits for \(W\) responses (and reads from \(R\) nodes, typically \(N=3, R=2, W=2\)).
+2. **Membership and Routing via Gossip (`O(1)` Routing)**: Every node gossips ring membership changes with random peers every second so every node holds a full copy of the token ring in memory. A client can send a `get(key)` or `put(key, context, value)` to any node in the key's **Preference List** (the top $N$ distinct physical nodes walking clockwise around the ring) or through a load balancer; the receiving node acts as the **Coordinator** for that request.
+3. **Replication via Tunable Quorums (`R + W > N`, Module 03)**: Normally, the Coordinator sends writes to the top $N$ healthy nodes in the key's Preference List and waits for $W$ responses (and reads from $R$ nodes, typically $N=3, R=2, W=2$).
 4. **High Write Availability via Sloppy Quorums and Hinted Handoff (Module 03)**: If primary nodes in the Preference List are unreachable during a network partition or node crash, Dynamo **never rejects the write**; it walks further clockwise around the ring, writes the record to healthy surrogate nodes with a local metadata **hint**, and hands the data back when the primary nodes recover.
 5. **Version Branching and Conflict Detection via Vector Clocks (Module 02)**: Because sloppy quorums and concurrent multi-coordinator writes can create divergent versions of a key, Dynamo tags every mutation with a **Vector Clock** `[(CoordinatorNode, Counter), ...]`. If a read returns two causally ordered versions (`V1 < V2`), Dynamo automatically discards `V1`. If a read returns two **concurrent** versions (`V1 || V2`), Dynamo returns **both sibling objects** to the client application, which performs **Client-Side Semantic Reconciliation** (for example, taking the union of two shopping-cart item sets) and writes the merged version back to collapse the vector branches!
 6. **Replica Convergence via Read Repair and Merkle Tree Anti-Entropy (Module 03)**: Hot keys are reconciled automatically during `get()` calls via **Read Repair**; cold key ranges are synchronized in the background by exchanging **Merkle Tree** hashes per token range.
@@ -103,7 +103,7 @@ They observed that **Dynamo's masterless ring and tunable quorums** gave unbeata
 
 ### How Cassandra Combines the Two Architectures
 
-1. **Masterless Ring + Partitioner**: Like Dynamo, Cassandra is 100% peer-to-peer: every node is identical, nodes exchange cluster state via a **Gossip Protocol** with a **\(\varphi\) Accrual Failure Detector** (Module 04), and any node can act as the **Coordinator** for any client query.
+1. **Masterless Ring + Partitioner**: Like Dynamo, Cassandra is 100% peer-to-peer: every node is identical, nodes exchange cluster state via a **Gossip Protocol** with a **$\varphi$ Accrual Failure Detector** (Module 04), and any node can act as the **Coordinator** for any client query.
 2. **Compound Primary Key (`PartitionKey + ClusteringKey`)**: This is the single most important data-modeling concept in Cassandra[^cassandra-2010]:
    ```sql
    CREATE TABLE DeviceTelemetry (
@@ -120,7 +120,7 @@ They observed that **Dynamo's masterless ring and tunable quorums** gave unbeata
    - **The Partition Key `(tenant_id, device_id, bucket_day)`** (enclosed in the inner parentheses): Cassandra hashes the entire Partition Key using `Murmur3Partitioner` to compute the **64-bit Ring Token**, which determines **which physical nodes on the Consistent Hash Ring store this partition**! All rows with the same `(tenant_id, device_id, bucket_day)` live together on the exact same replica set.
    - **The Clustering Key `recorded_at DESC, event_id ASC`**: Inside each node's local **LSM-Tree (`CommitLog + MemTable + SSTables`)**, all rows sharing that Partition Key are stored **physically sorted by the Clustering Key**! Therefore, querying *"Give me the latest 50 telemetry events for Device X today between 10:00 and 11:00"* hits **one partition on the ring** and reads a **single contiguous sorted slice** of the SSTable in milliseconds!
 3. **Tunable Consistency Per Query (Not Fixed at Table Creation)**: Unlike BigTable (always `CP`) or classic Dynamo, a Cassandra client specifies the consistency level **on every individual read or write request**:
-   - Write with `LOCAL_QUORUM` and Read with `LOCAL_QUORUM` inside a single datacenter (\(R + W > N_{\text{local}}\)) for strong overlapping quorum consistency without paying cross-continent WAN latency.
+   - Write with `LOCAL_QUORUM` and Read with `LOCAL_QUORUM` inside a single datacenter ($R + W > N_{\text{local}}$) for strong overlapping quorum consistency without paying cross-continent WAN latency.
    - Write with `ONE` or `ANY` (allowing Hinted Handoff) for ultra-fast fire-and-forget telemetry ingestion.
    *(Note: Unlike Dynamo's vector clocks, Cassandra resolves concurrent cell mutations using **Last-Write-Wins (LWW) microsecond timestamps** per cell, and uses lightweight **Paxos (`IF NOT EXISTS` Lightweight Transactions)** when true linearizable compare-and-set is required.)*
 
@@ -142,7 +142,7 @@ They observed that **Dynamo's masterless ring and tunable quorums** gave unbeata
 
 In **Atlas**, the Device Telemetry and Audit History database uses **Apache Cassandra** across 6 global regions, applying the exact lessons of BigTable and Dynamo:
 - **Time-Bucketed Partition Keys to Prevent Unbounded Wide Partitions**: If Atlas defined its Cassandra Partition Key simply as `(tenant_id, device_id)`, a noisy industrial device emitting 10 events per second for 3 years would accumulate `946 million rows` inside a single Cassandra partition (exceeding the safe ~100 MB partition limit and crushing compaction). By adding `bucket_day` to the Partition Key (`(tenant_id, device_id, bucket_day)`), each partition is bounded to at most 24 hours of data (~8 MB) while keeping full `ClusteringKey = recorded_at DESC` range scans within each day.
-- **`LOCAL_QUORUM` + Multi-Region Asynchronous Replication**: Telemetry writes use `LOCAL_QUORUM` (\(N=3, W=2\) within the local region) for low-latency durability, while audit queries read with `LOCAL_QUORUM` (\(R=2\)) paired with Bloom filters and Merkle tree anti-entropy.
+- **`LOCAL_QUORUM` + Multi-Region Asynchronous Replication**: Telemetry writes use `LOCAL_QUORUM` ($N=3, W=2$ within the local region) for low-latency durability, while audit queries read with `LOCAL_QUORUM` ($R=2$) paired with Bloom filters and Merkle tree anti-entropy.
 
 ---
 

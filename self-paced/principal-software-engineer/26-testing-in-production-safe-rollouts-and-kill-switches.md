@@ -36,14 +36,14 @@ It means **architecting your production data plane so that candidate code paths,
 ### 1. Shadow Consumer Groups on Streaming Logs (`Zero-Impact Live Tap`)
 
 Recall from Module 17 that in **Apache Kafka** and **Azure Event Hubs**, multiple independent **Consumer Groups** can read from the exact same partitioned log concurrently without interfering with each other's offsets, and because sequential log reads are served straight from the broker's **OS Page Cache (`sendfile` zero-copy)**, adding a second consumer group adds virtually zero disk I/O to the brokers!
-When re-architecting a high-throughput ingestion or compaction pipeline (such as the \(78\times\) Claim-Check batch coalescer in Module 23):
+When re-architecting a high-throughput ingestion or compaction pipeline (such as the $78\times$ Claim-Check batch coalescer in Module 23):
 1. You deploy the candidate v2 worker pool in production attached to a dedicated **Shadow Consumer Group (`cg-shadow-v2`)**, reading the **exact same live multi-tenant production stream** as the active v1 pipeline.
 2. The shadow v2 workers write their output Parquet/Delta files to an **isolated shadow storage container** with a 3-day auto-expiration TTL, never touching customer-facing tables or sending outbound webhooks.
 3. If the shadow v2 worker hits an unexpected multi-tenant skew edge case or out-of-memory error, it crashes inside its isolated shadow namespace with **zero impact on production SLA**!
 
 ### 2. Privacy-Safe Synthetic Workload Generation via Stratified Tenant-Tier Extrapolation
 
-What if you need to load-test a pipeline at **\(5\times\) current production peak** (or test in a pre-production stamp where live customer streams cannot be tapped due to **GDPR / PII / EUII** privacy boundaries)?
+What if you need to load-test a pipeline at **$5\times$ current production peak** (or test in a pre-production stamp where live customer streams cannot be tapped due to **GDPR / PII / EUII** privacy boundaries)?
 Naive synthetic load generators create uniform fake records (`TenantId = Random(1..1000)`, fixed `1 KB` JSON payload), which completely miss the multi-tenant fan-out bottlenecks and LOH memory spikes caused by real-world skew!
 
 Instead, use **Privacy-Safe Stratified Tenant-Tier Extrapolation**:
@@ -86,7 +86,7 @@ Cloud platforms enforce **Progressive Delivery across Concentric Deployment Ring
 
 Three engineering rules govern safe ring progression:
 1. **Never Deploy Paired Availability Zones or Paired Geographies Simultaneously**: If `US-East` and `US-West` (or `EU-North` and `EU-West`) are disaster-recovery pairs, Ring 3 deploys `US-East` first and waits for the full **Bake Time Window** (`24 hours`) before touching `US-West`.
-2. **Minimum Sample-Size & Bake-Time Guardrails**: A ring cannot advance after 5 minutes just because `ErrorRate == 0.0%` if only 12 requests arrived during those 5 minutes! The health gate requires **both** a minimum elapsed bake time \(T_{\text{bake}}\) (to catch slow memory leaks and periodic cron jobs) **and** a minimum statistically significant sample volume \(N_{\min}\) (for example, `>= 10,000` evaluations) before marking a ring healthy.
+2. **Minimum Sample-Size & Bake-Time Guardrails**: A ring cannot advance after 5 minutes just because `ErrorRate == 0.0%` if only 12 requests arrived during those 5 minutes! The health gate requires **both** a minimum elapsed bake time $T_{\text{bake}}$ (to catch slow memory leaks and periodic cron jobs) **and** a minimum statistically significant sample volume $N_{\min}$ (for example, `>= 10,000` evaluations) before marking a ring healthy.
 3. **Automated Rollback on SLI Breach (Zero Human-in-the-Loop Delay)**: During an incident at 3:00 AM, waiting 25 minutes for an on-call engineer to wake up, log in, read dashboards, and manually revert a deployment burns your entire monthly `99.99%` error budget (`4.38 minutes`). If the ring's error rate or `p99` latency crosses the configured threshold (or a **Sequential Probability Ratio Test / Z-score** shows statistically significant degradation compared to the baseline control cohort), the orchestrator **automatically halts progression and reverts the ring to the previous known-good artifact**.
 
 ---
@@ -267,7 +267,7 @@ public sealed class EmergencyKillSwitchAndRingGate
 ## 5. Testing in production, supply-chain security, and kill-switches in the Atlas platform
 
 In **Atlas**, these production verification and safety mechanisms protect all 500M edge devices:
-- **Shadow Consumer Group (`cg-atlas-tip`) & Stratified Synthetic Extrapolation**: Every change to Atlas's telemetry ingestion and applicability engine runs for 48 hours on a shadow Kafka consumer group against live 1.67M RPS production streams (verified by a continuous rolling `SHA-256` parity checker) and is stress-tested at \(3\times\) peak using privacy-safe **Stratified Tenant-Tier Synthetic Workloads**.
+- **Shadow Consumer Group (`cg-atlas-tip`) & Stratified Synthetic Extrapolation**: Every change to Atlas's telemetry ingestion and applicability engine runs for 48 hours on a shadow Kafka consumer group against live 1.67M RPS production streams (verified by a continuous rolling `SHA-256` parity checker) and is stress-tested at $3\times$ peak using privacy-safe **Stratified Tenant-Tier Synthetic Workloads**.
 - **Asynchronous `HTTP 202` Supply-Chain Pipeline with P2P Delivery Optimization**: Firmware uploads land in an isolated Quarantine Zone, verify `SHA-256` content hashes (deduplicating identical layers in $O(1)$), run inside ephemeral malware-detonation containers, receive an HSM signature and P2P piece-hash metadata, and promote to immutable CDN storage.
 - **`< 5-Second` Multi-Stage Emergency Kill-Switch**: When the `Rollout Health Monitor` detects an error-rate breach in Ring 0 or Ring 1, it broadcasts a priority kill-switch frame to all 10 regional stamps in `< 2 seconds`, halting `Scan`, revoking `Valet-Key` CDN downloads, and rejecting `PreInstallCommit` checks before staged binaries can execute at the next maintenance window.
 

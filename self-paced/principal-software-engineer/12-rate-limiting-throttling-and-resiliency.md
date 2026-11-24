@@ -42,51 +42,51 @@ Every rate limiter and throttler implements one of five algorithms, each with a 
 
 ### 1. Token Bucket
 
-Used by Amazon API Gateway, Envoy, Stripe, and Azure Resource Manager, the **Token Bucket** algorithm models capacity as a bucket that holds at most \(B\) tokens (the **burst capacity**) and refills continuously at a steady rate of \(r\) tokens per second (the **sustained rate**):
-- When a request of cost \(c\) (usually \(c = 1\)) arrives at monotonic timestamp \(t_{\text{now}}\), we first lazily compute how many tokens have been generated since `lastRefillTime`:
-  \[
+Used by Amazon API Gateway, Envoy, Stripe, and Azure Resource Manager, the **Token Bucket** algorithm models capacity as a bucket that holds at most $B$ tokens (the **burst capacity**) and refills continuously at a steady rate of $r$ tokens per second (the **sustained rate**):
+- When a request of cost $c$ (usually $c = 1$) arrives at monotonic timestamp $t_{\text{now}}$, we first lazily compute how many tokens have been generated since `lastRefillTime`:
+  $$
   \text{tokens} \leftarrow \min\!\Bigl(B, \;\text{tokens} + (t_{\text{now}} - t_{\text{lastRefill}}) \times r\Bigr), \qquad t_{\text{lastRefill}} \leftarrow t_{\text{now}}
-  \]
-- If \(\text{tokens} \ge c\), we deduct \(\text{tokens} \leftarrow \text{tokens} - c\) and **allow** the request.
-- If \(\text{tokens} < c\), we **reject** (`429`) and compute the exact wait duration \(\text{retryAfter} = \frac{c - \text{tokens}}{r}\).
+  $$
+- If $\text{tokens} \ge c$, we deduct $\text{tokens} \leftarrow \text{tokens} - c$ and **allow** the request.
+- If $\text{tokens} < c$, we **reject** (`429`) and compute the exact wait duration $\text{retryAfter} = \frac{c - \text{tokens}}{r}$.
 
 Notice why lazy refill on request arrival is so clean: **it requires zero background timer threads!**
 Every tenant bucket is just two 64-bit numbers (`double tokens`, `long lastTimestampTicks`) in memory (`16 bytes` per tenant).
-Token Bucket is the industry default for API throttling because real human and service traffic is naturally bursty: a client that has been idle for 10 seconds can immediately burst \(B\) parallel requests to load a dashboard, and is then smoothly clamped to \(r\) requests/sec thereafter.
+Token Bucket is the industry default for API throttling because real human and service traffic is naturally bursty: a client that has been idle for 10 seconds can immediately burst $B$ parallel requests to load a dashboard, and is then smoothly clamped to $r$ requests/sec thereafter.
 
 ### 2. Leaky Bucket
 
 The **Leaky Bucket** metaphor is used in two slightly different ways in networking and services:
-- **Leaky Bucket as a Meter**: Mathematically dual to a Token Bucket where incoming requests add water to a bucket of capacity \(B\) that drains at constant rate \(r\), rejecting requests when adding water would overflow \(B\).
-- **Leaky Bucket as a FIFO Queue (Traffic Shaping)**: Incoming requests enter a bounded FIFO queue of size \(B\) and a worker thread dequeues and processes them at a **strictly constant fixed interval** \(1/r\) seconds. Unlike Token Bucket (which lets a burst of \(B\) requests hit the downstream service instantaneously), a Leaky Bucket queue **eliminates downstream burstiness completely**, turning spiky arrivals into a flat, uniform stream at the cost of queueing latency.
+- **Leaky Bucket as a Meter**: Mathematically dual to a Token Bucket where incoming requests add water to a bucket of capacity $B$ that drains at constant rate $r$, rejecting requests when adding water would overflow $B$.
+- **Leaky Bucket as a FIFO Queue (Traffic Shaping)**: Incoming requests enter a bounded FIFO queue of size $B$ and a worker thread dequeues and processes them at a **strictly constant fixed interval** $1/r$ seconds. Unlike Token Bucket (which lets a burst of $B$ requests hit the downstream service instantaneously), a Leaky Bucket queue **eliminates downstream burstiness completely**, turning spiky arrivals into a flat, uniform stream at the cost of queueing latency.
 
 ### 3. Fixed Window Counter
 
 Divides time into fixed calendar buckets (for example, 1-minute windows keyed by `tenantId:202611211410`) and increments an integer counter per request (`INCR` with `EXPIRE 60`).
-It takes only 1 integer per key, but suffers from the **Boundary Burst Bug**: if a tenant has a limit of `100 requests/minute` and sends 100 requests at `14:10:59` (the last second of Window 1) and another 100 requests at `14:11:01` (the first second of Window 2), both fixed windows see `count = 100 <= 100`, yet your backend just absorbed **200 requests in 2 seconds (\(2\times\) the intended rate limit)**!
+It takes only 1 integer per key, but suffers from the **Boundary Burst Bug**: if a tenant has a limit of `100 requests/minute` and sends 100 requests at `14:10:59` (the last second of Window 1) and another 100 requests at `14:11:01` (the first second of Window 2), both fixed windows see `count = 100 <= 100`, yet your backend just absorbed **200 requests in 2 seconds ($2\times$ the intended rate limit)**!
 
 ### 4. Sliding Window Log
 
 To eliminate the boundary bug with 100% mathematical precision, the **Sliding Window Log** stores the exact timestamp of every accepted request inside a sorted set (such as a Redis `ZSET` keyed by `tenantId`).
-When a request arrives at \(t_{\text{now}}\) for a window of length \(W\) (say 60 seconds):
-1. Remove all timestamps older than \(t_{\text{now}} - W\) (`ZREMRANGEBYSCORE key -inf (t_now - W)`).
+When a request arrives at $t_{\text{now}}$ for a window of length $W$ (say 60 seconds):
+1. Remove all timestamps older than $t_{\text{now}} - W$ (`ZREMRANGEBYSCORE key -inf (t_now - W)`).
 2. Count the remaining entries (`ZCARD key`).
-3. If `count < limit`, insert \(t_{\text{now}}\) (`ZADD key t_now requestId`) and allow the request; otherwise reject.
+3. If `count < limit`, insert $t_{\text{now}}$ (`ZADD key t_now requestId`) and allow the request; otherwise reject.
 
-Sliding Window Log is 100% accurate across any window boundary, but its **memory and CPU cost is \(O(\text{limit})\) per tenant**: if a high-volume tenant has a limit of `50,000 requests/minute`, storing 50,000 64-bit timestamps in a sorted tree per tenant consumes megabytes of RAM.
+Sliding Window Log is 100% accurate across any window boundary, but its **memory and CPU cost is $O(\text{limit})$ per tenant**: if a high-volume tenant has a limit of `50,000 requests/minute`, storing 50,000 64-bit timestamps in a sorted tree per tenant consumes megabytes of RAM.
 
 ### 5. Sliding Window Counter (Weighted Approximation)
 
 Used by Cloudflare at edge scale, the **Sliding Window Counter** achieves `> 99.9%` of the accuracy of a Sliding Window Log while using only **two integers (`O(1)` memory)** per tenant!
 Keep only the counter for the **previous fixed window** (`prevCount`) and the **current fixed window** (`currCount`).
-When a request arrives at fraction \(\alpha \in [0, 1)\) through the current window of length \(W\) (for example, 15 seconds into a 60-second window, so \(\alpha = 15/60 = 0.25\)), the sliding 60-second window covers the last \(1 - \alpha = 75\%\) of the previous window plus the elapsed \(25\%\) of the current window.
+When a request arrives at fraction $\alpha \in [0, 1)$ through the current window of length $W$ (for example, 15 seconds into a 60-second window, so $\alpha = 15/60 = 0.25$), the sliding 60-second window covers the last $1 - \alpha = 75\%$ of the previous window plus the elapsed $25\%$ of the current window.
 We estimate the request count in the sliding window as:
 
-\[
+$$
 \text{estimatedCount} = \text{prevCount} \times (1 - \alpha) + \text{currCount}
-\]
+$$
 
-If \(\text{estimatedCount} < \text{limit}\), we increment `currCount` and allow the request!
+If $\text{estimatedCount} < \text{limit}$, we increment `currCount` and allow the request!
 
 | Algorithm | Memory per tenant | Allows instantaneous burst? | Vulnerable to $2\times$ boundary spike? | Best suited for |
 | --- | --- | --- | --- | --- |
@@ -133,9 +133,9 @@ With deterministic backoff (`1s, 2s, 4s`), all 10,000 callers sleep for exactly 
 
 As Marc Brooker demonstrated in the AWS Builders' Library, adding **Full Jitter** breaks up synchronized waves cleanly[^aws-builders-backoff]:
 
-\[
+$$
 T_{\text{sleep}} = \text{UniformRandom}\!\Bigl(0, \;\min\!\bigl(T_{\text{max}}, \;T_{\text{base}} \times 2^{\text{attempt}}\bigr)\Bigr)
-\]
+$$
 
 Pair backoff + jitter with two mandatory guardrails:
 - **Idempotency requirement**: Only automatically retry operations that are **idempotent** (safe to apply multiple times with the same idempotency key or `ETag`, Module 01).
@@ -170,7 +170,7 @@ A **Circuit Breaker** wraps the outbound call in a three-state machine[^fowler-c
 
 Named after the watertight compartments of a ship's hull, the **Bulkhead Pattern** partitions shared resources (thread pools, HTTP connection pools, memory queues, and worker pods) into isolated pools so that if Dependency A hangs or Tenant X floods the system, it can only exhaust its own compartment, leaving Dependencies B and C and all other tenants 100% healthy[^azure-resiliency].
 At hyperscale, AWS and Azure combine Bulkheads with **Shuffle Sharding**: instead of assigning each tenant to a single fixed shard of 2 workers out of 100, each tenant is assigned a pseudorandom subset of 4 workers (using two steps of Rendezvous Hashing!).
-With \(\binom{100}{4} = 3{,}921{,}225\) unique 4-worker combinations, if a poisonous tenant crashes all 4 of its assigned workers, another tenant has only a \(1 \text{ in } 3.9\text{ million}\) chance of sharing all 4 workers; isolating 99.99997% of customers without paying for dedicated single-tenant clusters[^aws-shuffle-sharding]!
+With $\binom{100}{4} = 3{,}921{,}225$ unique 4-worker combinations, if a poisonous tenant crashes all 4 of its assigned workers, another tenant has only a $1 \text{ in } 3.9\text{ million}$ chance of sharing all 4 workers; isolating 99.99997% of customers without paying for dedicated single-tenant clusters[^aws-shuffle-sharding]!
 
 ### 4. Timeout Propagation and Health Endpoint Monitoring
 
@@ -184,7 +184,7 @@ Two final operational rules complete the resiliency suite:
 
 In **Atlas**, multi-layered admission control prevented a major outage during a global firmware rollout:
 - **Per-Tenant Token Bucket + Fleet Shuffle Sharding**: Each tenant is assigned a **Shuffle Shard** of 4 regional ingestion gateways (selected via Rendezvous Hashing) and a **Token Bucket** quota enforced via local token reservations backed by atomic Redis Lua scripts.
-- **Priority Load Shedding at the Edge**: Every request arriving at an Atlas gateway is classified into three priority tiers: `P0 (Emergency Rollback & Control Plane)`, `P1 (Interactive Device Provisioning & Config Pulls)`, and `P2 (Background Telemetry & Diagnostic Uploads)`. When local host CPU or in-flight request latency crosses 80% of the SLA budget, an adaptive **Little's Law concurrency limiter** sheds `P2` traffic immediately with `503 Service Unavailable + Retry-After: jittered`, guaranteeing that `P0` rollback commands execute with `100%` reliability even under a \(10\times\) traffic storm.
+- **Priority Load Shedding at the Edge**: Every request arriving at an Atlas gateway is classified into three priority tiers: `P0 (Emergency Rollback & Control Plane)`, `P1 (Interactive Device Provisioning & Config Pulls)`, and `P2 (Background Telemetry & Diagnostic Uploads)`. When local host CPU or in-flight request latency crosses 80% of the SLA budget, an adaptive **Little's Law concurrency limiter** sheds `P2` traffic immediately with `503 Service Unavailable + Retry-After: jittered`, guaranteeing that `P0` rollback commands execute with `100%` reliability even under a $10\times$ traffic storm.
 
 ---
 
@@ -192,7 +192,7 @@ In **Atlas**, multi-layered admission control prevented a major outage during a 
 
 Resilient cloud systems control load and isolate faults at every boundary.
 **Rate limiting** paces outbound client traffic; **throttling** enforces per-tenant server quotas (`429`); and **load shedding** drops lower-priority requests (`503`) to keep the server alive when total capacity is saturated.
-Among rate-limiting algorithms, **Token Bucket** allows controlled bursts of size \(B\) at sustained rate \(r\) in \(O(1)\) memory; **Leaky Bucket queues** smooth traffic into a flat outflow rate; **Fixed Window Counters** suffer from a \(2\times\) boundary burst flaw; **Sliding Window Logs** achieve 100% accuracy at \(O(\text{Limit})\) memory cost; and **Sliding Window Counters** achieve `>99.9%` accuracy in just two integers per key.
+Among rate-limiting algorithms, **Token Bucket** allows controlled bursts of size $B$ at sustained rate $r$ in $O(1)$ memory; **Leaky Bucket queues** smooth traffic into a flat outflow rate; **Fixed Window Counters** suffer from a $2\times$ boundary burst flaw; **Sliding Window Logs** achieve 100% accuracy at $O(\text{Limit})$ memory cost; and **Sliding Window Counters** achieve `>99.9%` accuracy in just two integers per key.
 On the resiliency side, outbound calls must combine **Exponential Backoff with Full Jitter**, **Retry Budgets (`<= 10%`)**, **Circuit Breakers (`Closed / Open / Half-Open`)**, **Bulkhead Isolation (and Shuffle Sharding)**, and **Deadline Propagation** to prevent localized hiccups from cascading into metastable retry storms.
 
 To test your understanding before moving to Module 13, work through this changed case: suppose a service runs a **Sliding Window Counter** rate limiter with a limit of `100 requests per 60-second window`.

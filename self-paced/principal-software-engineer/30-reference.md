@@ -119,53 +119,53 @@ It consolidates the core definitions, back-of-the-envelope capacity formulas, ar
 ### Core Mathematical Formulas
 
 1. **Time & Volume Conversions**:
-   \[
+   $$
    1\text{ day} = 86{,}400\text{ s} \approx 10^5\text{ s}, \qquad 1\text{ year} \approx 3 \times 10^7\text{ s}, \qquad 3\text{ years} \approx 1{,}000\text{ days} \approx 10^8\text{ s}
-   \]
+   $$
 2. **Little's Law & Server Sizing**:
-   \[
+   $$
    L = \lambda \times W, \qquad \text{Safe RPS per Server (at 33\% headroom)} \approx \frac{30{,}000}{T_{\text{ms}}} \quad (\text{or } \approx 5{,}000\text{--}8{,}000\text{ RPS for fast async endpoints})
-   \]
+   $$
 3. **3-Year Storage Footprint**:
-   \[
+   $$
    \text{Bytes}_{\text{3yr}} = \text{WritesPerSec} \times \text{BytesPerWrite} \times 10^8\text{ s} \times \text{ReplicationFactor}
-   \]
+   $$
 4. **Strict Quorum Overlap & Fault Tolerance ($N$ replicas)**:
-   \[
+   $$
    R + W > N, \qquad \text{Majority Quorum}: W = R = \left\lfloor \frac{N}{2} \right\rfloor + 1 \quad (\text{tolerates } f = \left\lfloor \frac{N - 1}{2} \right\rfloor \text{ failures})
-   \]
+   $$
 5. **Consensus Replica Minimums (for $f$ faulty nodes)**:
-   \[
+   $$
    N_{\text{Crash-Recovery (Paxos/Raft)}} = 2f + 1, \qquad N_{\text{Byzantine (PBFT)}} = 3f + 1
-   \]
+   $$
 6. **Bloom Filter Sizing ($n$ items, $m$ bits, $k$ hashes, target false-positive rate $p$)**:
-   \[
+   $$
    p \approx \left(1 - e^{-kn/m}\right)^k, \qquad k_{\text{opt}} = \frac{m}{n} \ln 2 \approx 0.693 \frac{m}{n}, \qquad \frac{m}{n} = -\frac{\ln p}{(\ln 2)^2} \approx -1.44 \log_2(p) \quad (\approx 9.6\text{ bits/item for } p = 1\%)
-   \]
+   $$
 7. **Count-Min Sketch Sizing (error $\le \varepsilon N$ with probability $\ge 1 - \delta$)**:
-   \[
+   $$
    w = \left\lceil \frac{e}{\varepsilon} \right\rceil \approx \frac{2.718}{\varepsilon}, \qquad d = \left\lceil \ln\left(\frac{1}{\delta}\right) \right\rceil, \qquad \hat{f}(x) = \min_{0 \le r < d} \text{table}[r, h_r(x)]
-   \]
+   $$
 8. **HyperLogLog Relative Error ($m = 2^b$ registers)**:
-   \[
+   $$
    \text{Standard Error} \approx \frac{1.04}{\sqrt{m}} \quad (m = 16{,}384 \implies 12\text{ KB RAM}, \; \pm 0.81\%\text{ error})
-   \]
+   $$
 9. **Tail Latency Amplification (across $k$ parallel fan-out calls with per-shard tail probability $p$)**:
-   \[
+   $$
    P(\text{Slow Fan-Out Request}) = 1 - (1 - p)^k
-   \]
+   $$
 10. **Cascading Synchronous Dependency Availability (across $k$ sequential services with availability $a_i$)**:
-    \[
+    $$
     A_{\text{end-to-end}} = \prod_{i=1}^k a_i
-    \]
+    $$
 11. **Shuffle Sharding Virtual Shard Count & Co-Tenant Blast Radius ($N$ workers, $k$ endpoints per tenant)**:
-    \[
+    $$
     \text{Virtual Shards} = \binom{N}{k} = \frac{N!}{k!(N - k)!}, \qquad P(\text{Complete Co-Tenant Overlap}) = \frac{1}{\binom{N}{k}}
-    \]
+    $$
 12. **Reciprocal Rank Fusion (`RRF`) Hybrid Search Score (across retrieval methods $m \in M$, smoothing constant $k = 60$)**:
-    \[
+    $$
     \text{RRF\_Score}(d) = \sum_{m \in M} \frac{1}{k + \text{rank}_m(d)}
-    \]
+    $$
 
 ---
 
@@ -213,7 +213,7 @@ It consolidates the core definitions, back-of-the-envelope capacity formulas, ar
 19. **Ghemawat, S., Gobioff, H., & Leung, S.-T.** (2003). "The Google File System." *ACM SOSP*, 29–43.
 20. **Gilbert, S., & Lynch, N.** (2002). "Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services." *ACM SIGACT News*, 33(2), 51–59.
 21. **Gray, C. G., & Cheriton, D. R.** (1989). "Leases: An Efficient Fault-Tolerant Mechanism for Distributed File Cache Consistency." *ACM SOSP*, 202–210.
-22. **Hayashibara, N., Defago, X., Yared, R., & Katayama, T.** (2004). "The \(\varphi\) Accrual Failure Detector." *IEEE SRDS*, 66–78.
+22. **Hayashibara, N., Defago, X., Yared, R., & Katayama, T.** (2004). "The $\varphi$ Accrual Failure Detector." *IEEE SRDS*, 66–78.
 23. **Herlihy, M. P., & Wing, J. M.** (1990). "Linearizability: A Correctness Condition for Concurrent Objects." *ACM TOPLAS*, 12(3), 463–492.
 24. **Karger, D., Lehman, E., Leighton, T., Panigrahy, R., Levine, M., & Lewin, D.** (1997). "Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web." *ACM STOC*, 654–663.
 25. **Kirsch, A., & Mitzenmacher, M.** (2006). "Less Hashing, Same Performance: Building a Better Bloom Filter." *ESA*, 456–467.
@@ -223,7 +223,7 @@ It consolidates the core definitions, back-of-the-envelope capacity formulas, ar
 29. **Lamport, L.** (1978). "Time, Clocks, and the Ordering of Events in a Distributed System." *Communications of the ACM*, 21(7), 558–565.
 30. **Lamport, L.** (1998). "The Part-Time Parliament." *ACM Transactions on Computer Systems*, 16(2), 133–169.
 31. **Lamport, L.** (2001). "Paxos Made Simple." *ACM SIGACT News*, 32(4), 51–58.
-32. **Little, J. D. C.** (1961). "A Proof for the Queuing Formula: \(L = \lambda W\)." *Operations Research*, 9(3), 383–387.
+32. **Little, J. D. C.** (1961). "A Proof for the Queuing Formula: $L = \lambda W$." *Operations Research*, 9(3), 383–387.
 33. **Melnik, S., et al.** (2010). "Dremel: Interactive Analysis of Web-Scale Datasets." *Proceedings of the VLDB Endowment (PVLDB)*, 3(1), 330–339.
 34. **Mitzenmacher, M.** (2001). "The Power of Two Choices in Randomized Load Balancing." *IEEE TPDS*, 12(10), 1094–1104.
 35. **Model Context Protocol (`MCP`) Specification** (2024–2026). [https://modelcontextprotocol.io/specification/](https://modelcontextprotocol.io/specification/).

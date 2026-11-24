@@ -14,7 +14,7 @@ GROUP BY tenant_id;
 Notice that this query touches only **3 columns** (`tenant_id`, `event_type`, `latency_ms`, totaling `24 bytes` per row) out of a wide **50-column telemetry schema** (`2,000 bytes` per row).
 If that 100 TB table is stored in a row-oriented format, the storage engine must read and decompress **all 2,000 bytes of every single row (`100 TB` of disk I/O)** just to extract `24 bytes` per row, wasting **98.8% of disk bandwidth** on 47 columns the query immediately throws away!
 
-This module explains how **Column-Oriented Storage (`Apache Parquet` and `Apache ORC`)** eliminates that 98.8% I/O waste, how **Columnar Encodings (`Dictionary`, `Run-Length Encoding [RLE]`, `Bit-Packing`, `Delta`)** and **Dremel Nested Repetition/Definition Levels** compress petabytes of nested JSON/Protobuf events by \(10\times\), how **Row-Group Min/Max Statistics and Bloom Filter Predicate Pushdown** skip 99% of disk blocks without decompressing a single byte, how streaming pipelines cure the **Small-File Problem**, and how **Modern Lakehouse Table Formats (`Delta Lake` and `Apache Iceberg`)** layer ACID transactions and snapshot isolation directly onto cloud object storage (`ADLS Gen2 / Amazon S3`).
+This module explains how **Column-Oriented Storage (`Apache Parquet` and `Apache ORC`)** eliminates that 98.8% I/O waste, how **Columnar Encodings (`Dictionary`, `Run-Length Encoding [RLE]`, `Bit-Packing`, `Delta`)** and **Dremel Nested Repetition/Definition Levels** compress petabytes of nested JSON/Protobuf events by $10\times$, how **Row-Group Min/Max Statistics and Bloom Filter Predicate Pushdown** skip 99% of disk blocks without decompressing a single byte, how streaming pipelines cure the **Small-File Problem**, and how **Modern Lakehouse Table Formats (`Delta Lake` and `Apache Iceberg`)** layer ACID transactions and snapshot isolation directly onto cloud object storage (`ADLS Gen2 / Amazon S3`).
 
 > **Prerequisite:** [Module 06: Write-Ahead Logs and Storage Engines](./06-write-ahead-logs-and-storage-engines.md), [Module 09: Probabilistic Data Structures at Scale](./09-probabilistic-data-structures-at-scale.md), and [Module 23: Multi-Tenant Isolation and Noisy-Neighbor Economics](./23-multi-tenant-isolation-and-noisy-neighbor-economics.md).
 
@@ -48,7 +48,7 @@ Logical Table:
 ```
 
 Converting a table from row layout to column layout produces three compounding mechanical advantages for analytical, security-graph, and telemetry workloads[^ddia-ch3]:
-1. **Projection Pushdown (Column Pruning)**: A query that references 3 out of 60 columns issues HTTP `Range: bytes=start-end` reads against cloud object storage for **only those 3 column byte ranges**, cutting network and disk I/O by \(20\times\) before reading a single value.
+1. **Projection Pushdown (Column Pruning)**: A query that references 3 out of 60 columns issues HTTP `Range: bytes=start-end` reads against cloud object storage for **only those 3 column byte ranges**, cutting network and disk I/O by $20\times$ before reading a single value.
 2. **Massive Compression Ratios (`5x` to `20x` Smaller than Row Stores)**: In a row store, adjacent bytes on disk belong to completely different data types (`UUID`, then `UTF-8 String`, then `Int64`, then `Float64`), which defeats byte-level compression. In a column store, 1,000,000 values of the *exact same column and data type* sit contiguously (`["T1", "T1", "T1", ...]`), enabling specialized columnar encodings (`Dictionary + RLE + Delta`) before general-purpose `Zstandard (Zstd)` or `Snappy` compression runs.
 3. **SIMD Vectorized CPU Execution**: Because a decoded column page is a contiguous array of homogeneous primitives (`int64[4096]`), the query engine (`Spark Photon`, `DuckDB`, `Velox`, `ClickHouse`, `.NET Vector256<long>`) processes 4 to 16 rows per CPU clock cycle using AVX-2 / AVX-512 SIMD instructions with zero per-row virtual method dispatch!
 
@@ -231,9 +231,9 @@ public sealed class ColumnarRleDictionaryChunk
 Why does Parquet require large Row Groups (`128 MB` to `512 MB` per file) to achieve its compression and I/O efficiency?
 Suppose a team wires an Azure Event Hub or Kafka consumer directly to ADLS Gen2 / S3 and flushes a new Parquet file every 5 seconds across 128 partitions.
 In a single day (`86,400 seconds`), that job writes:
-\[
+$$
 \frac{86{,}400}{5} \times 128 = \mathbf{2{,}211{,}840 \text{ tiny Parquet files per day (each only } 50\text{ KB to } 200\text{ KB)!}}
-\]
+$$
 This is the infamous **Small-File Problem**, and it breaks cloud analytics in three ways:
 1. **Object-Store Metadata Listing Bottleneck**: Before Spark, Trino, or DuckDB can read a day's partition, it must call `ListBlobs` on 2.2 million files and issue 2.2 million separate HTTP `GET` requests to read 2.2 million Parquet footers! A query that should take 3 seconds on two hundred `256 MB` files takes **25 minutes** just waiting on HTTP round-trip overhead.
 2. **Destroyed Columnar Compression & RLE**: A `50 KB` Parquet file contains only a few hundred rows, so Dictionary Pages are larger than the data itself and RLE runs are tiny.
@@ -274,7 +274,7 @@ LAKEHOUSE TABLE ON CLOUD OBJECT STORAGE (ADLS Gen2 / S3)
 Look at how the **Transaction Log (`_delta_log` in Delta Lake / `Metadata -> Manifest List -> Manifest Files` tree in Apache Iceberg)** solves every failure mode of raw object storage[^delta-lake-paper]:
 
 1. **Never `LIST` Data Directories; Read the Atomic Log**:
-   Readers **never** rely on eventually consistent or non-atomic directory listings of `/data/*.parquet`. Instead, a reader inspects the latest committed transaction log version \(V\) (for example, `000002.json`), which defines the exact set of active Parquet files at Snapshot \(V\). If a writer crashes after uploading `uncommitted-temp.parquet` to `/data/` before committing `000003.json`, `uncommitted-temp.parquet` is not referenced in the log and is **completely invisible to all readers (100% Atomicity)**!
+   Readers **never** rely on eventually consistent or non-atomic directory listings of `/data/*.parquet`. Instead, a reader inspects the latest committed transaction log version $V$ (for example, `000002.json`), which defines the exact set of active Parquet files at Snapshot $V$. If a writer crashes after uploading `uncommitted-temp.parquet` to `/data/` before committing `000003.json`, `uncommitted-temp.parquet` is not referenced in the log and is **completely invisible to all readers (100% Atomicity)**!
 2. **Lock-Free MVCC Snapshot Isolation for Concurrent Compaction (`OPTIMIZE`) and Deletes**:
    When a compaction job merges `part-A.parquet` and `part-B.parquet` into `compacted-AB.parquet`, it writes `compacted-AB.parquet` first and then appends a single atomic commit `000002.json` containing `[RemoveFile(part-A), RemoveFile(part-B), AddFile(compacted-AB)]`.
    Crucially, **it does NOT immediately delete `part-A.parquet` and `part-B.parquet` from object storage!**

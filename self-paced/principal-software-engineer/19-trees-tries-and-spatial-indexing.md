@@ -12,27 +12,27 @@ This module connects the data-structure mechanics to their algorithmic patterns 
 ## 1. Binary Search Trees (BSTs), AVL rotations, and Red-Black invariants
 
 A **Tree** is a connected, acyclic undirected graph rooted at a single **Root** node (at `depth = 0`), where every other node has exactly one **Parent** and zero or more **Children** (nodes with zero children are **Leaf** nodes; nodes with at least one child are **Internal** nodes)[^skiena-adm].
-The **Height** \(H\) of a tree is the number of edges on the longest path from the Root to a Leaf.
+The **Height** $H$ of a tree is the number of edges on the longest path from the Root to a Leaf.
 
 In a **Binary Search Tree (BST)**, every node has at most two children (`Left` and `Right`) and satisfies the **BST Ordering Invariant**:
-> For every node \(X\), all keys in \(X.\text{Left}\) are strictly less than \(X.\text{Key}\) (or \(\le\) by convention), and all keys in \(X.\text{Right}\) are strictly greater than \(X.\text{Key}\).
+> For every node $X$, all keys in $X.\text{Left}$ are strictly less than $X.\text{Key}$ (or $\le$ by convention), and all keys in $X.\text{Right}$ are strictly greater than $X.\text{Key}$.
 
-Because of the BST Ordering Invariant, searching, inserting, or deleting a key walks a single root-to-leaf path in **\(O(H)\) time**.
-If a BST of \(N\) nodes is reasonably balanced, its height is \(H \approx \log_2 N\), so all operations take \(O(\log N)\) time.
+Because of the BST Ordering Invariant, searching, inserting, or deleting a key walks a single root-to-leaf path in **$O(H)$ time**.
+If a BST of $N$ nodes is reasonably balanced, its height is $H \approx \log_2 N$, so all operations take $O(\log N)$ time.
 However, if you insert keys into an ordinary unbalanced BST in **sorted or nearly sorted order** (such as monotonically increasing timestamps or sequential IDs `1, 2, 3, ..., N`), every new key lands as the right child of the previous node!
-The tree degenerates into a singly linked list of height \(H = N - 1\), and every lookup and insert degrades from \(O(\log N)\) (`20 steps` for \(10^6\) keys) to **\(O(N)\) (`1,000,000 steps`)**.
+The tree degenerates into a singly linked list of height $H = N - 1$, and every lookup and insert degrades from $O(\log N)$ (`20 steps` for $10^6$ keys) to **$O(N)$ (`1,000,000 steps`)**.
 
-To guarantee \(H = O(\log N)\) in the worst case regardless of insertion order, production libraries use **Self-Balancing Binary Search Trees**:
+To guarantee $H = O(\log N)$ in the worst case regardless of insertion order, production libraries use **Self-Balancing Binary Search Trees**:
 
 ### 1. AVL Trees (Adelson-Velsky and Landis, 1962)
 
-An **AVL Tree** enforces a strict height-balance invariant on every node \(X\)[^skiena-adm][^sedgewick-alg]:
+An **AVL Tree** enforces a strict height-balance invariant on every node $X$[^skiena-adm][^sedgewick-alg]:
 
-\[
+$$
 \text{BalanceFactor}(X) = \text{Height}(X.\text{Left}) - \text{Height}(X.\text{Right}) \in \{-1, 0, +1\}
-\]
+$$
 
-Whenever an insertion or deletion causes any ancestor node's balance factor to become `+2` (left-heavy) or `-2` (right-heavy), the tree restores balance locally in \(O(1)\) pointer reassignments using one of **four rotation cases**:
+Whenever an insertion or deletion causes any ancestor node's balance factor to become `+2` (left-heavy) or `-2` (right-heavy), the tree restores balance locally in $O(1)$ pointer reassignments using one of **four rotation cases**:
 
 ```
 1. Left-Left (LL) Imbalance -> Single Right Rotation:     2. Left-Right (LR) Imbalance -> Left-then-Right Rotation:
@@ -48,7 +48,7 @@ Whenever an insertion or deletion causes any ancestor node's balance factor to b
 - **Left-Right (`LR`, `BF = +2` and left child `BF = -1`)**: First perform a **Left Rotation** on the left child `Y` (reducing it to the `LL` case), then perform a **Right Rotation** on `Z`.
 - **Right-Left (`RL`, `BF = -2` and right child `BF = +1`)**: First perform a **Right Rotation** on the right child `Y`, then a **Left Rotation** on `Z`.
 
-Because AVL trees enforce the strictest height bound (\(H < 1.44 \log_2(N + 2)\)), they deliver the **fastest worst-case lookup latency**, at the cost of performing up to \(O(\log N)\) rotations when deleting a node.
+Because AVL trees enforce the strictest height bound ($H < 1.44 \log_2(N + 2)$), they deliver the **fastest worst-case lookup latency**, at the cost of performing up to $O(\log N)$ rotations when deleting a node.
 
 ### 2. Red-Black Trees (Guibas and Sedgewick, 1978)
 
@@ -59,7 +59,7 @@ Used in .NET's `SortedSet<T>` and `SortedDictionary<TKey, TValue>`, C++'s `std::
 4. **Black-Height Rule**: Every path from any node down to any descendant NIL leaf contains the **exact same number of Black nodes** (the node's *Black Height*).
 
 Look at what Rules 3 and 4 together prove mathematically:
-Because the shortest possible root-to-leaf path contains *only* Black nodes (length \(B\)), and the longest possible root-to-leaf path alternates `Black -> Red -> Black -> Red` (length at most \(2B\)), **the longest path in a Red-Black Tree is never more than twice the length of the shortest path (\(H \le 2 \log_2(N + 1)\))**!
+Because the shortest possible root-to-leaf path contains *only* Black nodes (length $B$), and the longest possible root-to-leaf path alternates `Black -> Red -> Black -> Red` (length at most $2B$), **the longest path in a Red-Black Tree is never more than twice the length of the shortest path ($H \le 2 \log_2(N + 1)$)**!
 Even better, fixing a Red-Black violation after an **insertion requires at most 2 tree rotations**, and after a **deletion requires at most 3 tree rotations** (`O(1)` structural pointer mutations, plus color flips); making Red-Black Trees faster than AVL Trees for write-heavy workloads.
 
 | Tree structure | Max height $H$ | Worst-case rotations on Insert / Delete | Where it is used in practice |
@@ -73,7 +73,7 @@ Even better, fixing a Red-Black violation after an **insertion requires at most 
 
 ## 2. Essential tree traversals and algorithmic invariants
 
-Every recursive or iterative algorithm on a binary tree reduces to one of four canonical traversals, classified by whether they explore **depth-first** (using recursion or an explicit LIFO `Stack<Node>`, costing **\(O(H)\) auxiliary space**) or **breadth-first** (using a FIFO `Queue<Node>`, costing **\(O(W)\) auxiliary space**, where \(W \le N/2\) is the maximum width of any level):
+Every recursive or iterative algorithm on a binary tree reduces to one of four canonical traversals, classified by whether they explore **depth-first** (using recursion or an explicit LIFO `Stack<Node>`, costing **$O(H)$ auxiliary space**) or **breadth-first** (using a FIFO `Queue<Node>`, costing **$O(W)$ auxiliary space**, where $W \le N/2$ is the maximum width of any level):
 
 ```
          1
@@ -87,7 +87,7 @@ Let us connect these four traversals to the complete family of classic binary tr
 
 ### 1. Iterative In-Order Traversal with an Explicit Stack ($O(N)$ Time, $O(H)$ Space)
 
-Recursive in-order traversal is concise, but on a skewed or deep tree (\(H > 10{,}000\)) it risks overflowing the thread call stack (`StackOverflowException`).
+Recursive in-order traversal is concise, but on a skewed or deep tree ($H > 10{,}000$) it risks overflowing the thread call stack (`StackOverflowException`).
 Replacing recursion with an explicit heap-allocated `Stack<TreeNode>` gives you complete control over memory while preserving the exact `Left -> Root -> Right` visitation order.
 The invariant uses two state variables, `TreeNode? current = root` and `Stack<TreeNode> stack`: in each outer iteration, push `current` onto the stack and walk left (`current = current.Left`) until `current` hits `null`.
 At that point, the node on top of the stack has no unvisited left descendants, so pop it, record its value, and pivot into its right subtree (`current = popped.Right`).
@@ -117,7 +117,7 @@ public static IReadOnlyList<int> TraverseInOrderIterative(TreeNode? root)
 }
 ```
 
-Every node is pushed onto `stack` once and popped once, yielding strict **\(O(N)\) time** and **\(O(H)\) stack space**.
+Every node is pushed onto `stack` once and popped once, yielding strict **$O(N)$ time** and **$O(H)$ stack space**.
 
 ### 2. Validating a BST, Finding the In-Order Successor, and the $N$-th Highest Element
 
@@ -262,10 +262,10 @@ public static IReadOnlyList<int> GetTreePerimeter(TreeNode? root)
 ### 5. Level-Order Traversal, Minimum Depth, and Connecting All Siblings in $O(1)$ Space
 
 In standard **Level-Order Traversal (BFS)**, you can delimit levels either by swapping two queues (`current_queue` and `next_queue`), by enqueuing a `null` end-of-level sentinel marker whenever the previous level finishes, or by reading `int levelSize = queue.Count` at the top of each outer `while` iteration.
-Because BFS explores the tree strictly by distance from the root, it finds the **Minimum Depth of a Binary Tree** as soon as it dequeues the *very first leaf node* (`node.Left is null && node.Right is null`), avoiding the \(O(N)\) penalty of DFS on trees where one branch is 2 nodes deep and the other is 50,000 nodes deep.
+Because BFS explores the tree strictly by distance from the root, it finds the **Minimum Depth of a Binary Tree** as soon as it dequeues the *very first leaf node* (`node.Left is null && node.Right is null`), avoiding the $O(N)$ penalty of DFS on trees where one branch is 2 nodes deep and the other is 50,000 nodes deep.
 
 What if each node has a `Next` sibling pointer and we want to **Connect All Siblings of a Binary Tree** across the entire tree into one continuous level-order chain without allocating a `Queue<Node>`?
-We can use the already-linked `Next` pointers as our queue in **\(O(1)\) extra space** by maintaining two pointers, `current` (the node whose children we are currently discovering) and `last` (the tail of the linked level-order chain):
+We can use the already-linked `Next` pointers as our queue in **$O(1)$ extra space** by maintaining two pointers, `current` (the node whose children we are currently discovering) and `last` (the tail of the linked level-order chain):
 
 ```csharp
 public static void ConnectAllSiblings(SiblingTreeNode? root)
@@ -297,22 +297,22 @@ public static void ConnectAllSiblings(SiblingTreeNode? root)
 }
 ```
 
-Trace how `current` and `last` cooperate: initially both point to `root`. In the first iteration, `root.Left` is appended after `last` (`root.Next = root.Left; last = root.Left`), and `root.Right` is appended after that (`root.Left.Next = root.Right; last = root.Right`). Then `current` advances to `current.Next` (which is now `root.Left`!) and threads the depth-2 children onto `last`, traversing all \(N\) nodes in **\(O(N)\) time and \(O(1)\) auxiliary memory**.
+Trace how `current` and `last` cooperate: initially both point to `root`. In the first iteration, `root.Left` is appended after `last` (`root.Next = root.Left; last = root.Left`), and `root.Right` is appended after that (`root.Left.Next = root.Right; last = root.Right`). Then `current` advances to `current.Next` (which is now `root.Left`!) and threads the depth-2 children onto `last`, traversing all $N$ nodes in **$O(N)$ time and $O(1)$ auxiliary memory**.
 
 ### 6. Postorder Bottom-Up Pruning and Preorder Serialization
 
 Rounding out the binary tree toolkit are two structural patterns:
 - **Postorder Bottom-Up Pruning (`Delete Zero-Sum Subtrees`)**: Whenever a parent's fate depends on the computed aggregate of its children, use **Postorder (`Left -> Right -> Root`)**. To delete every subtree whose node values sum to zero, recursively compute `int leftSum = DeleteZeroSum(node.Left)` and `int rightSum = DeleteZeroSum(node.Right)`. If `leftSum == 0`, sever `node.Left = null`; if `rightSum == 0`, sever `node.Right = null`; then return `node.Val + leftSum + rightSum` (and if the root itself returns `0`, clear the entire tree).
-- **Preorder Serialization and Deserialization**: An in-order sequence alone cannot reconstruct a tree's topology. Emitting a **Preorder (`Root -> Left -> Right`)** stream that writes an explicit null sentinel (`"#"`) for every `null` child reference encodes both values and structure in \(O(N)\) tokens and deserializes recursively in a single \(O(N)\) pass.
+- **Preorder Serialization and Deserialization**: An in-order sequence alone cannot reconstruct a tree's topology. Emitting a **Preorder (`Root -> Left -> Right`)** stream that writes an explicit null sentinel (`"#"`) for every `null` child reference encodes both values and structure in $O(N)$ tokens and deserializes recursively in a single $O(N)$ pass.
 
 ---
 
 ## 3. Prefix Tries and Radix (Patricia) Trees
 
 Suppose you need to index 5 million domain names, URL routes, command-line flags, or firmware version prefixes (`"4.2.1-eu-canary"`), and support three operations: exact lookup, **prefix search (`StartsWith(prefix)`)**, and **longest-prefix match (`LongestPrefixOf(query)`)**.
-A Hash Table supports exact lookup in \(O(L)\) time (where \(L\) is the string length, since hashing the string reads all \(L\) characters), but **a Hash Table cannot do prefix searches or longest-prefix matches at all** without scanning every key!
-A balanced BST supports prefix ranges in \(O(L \cdot \log N)\) character comparisons.
-Can we eliminate the \(\log N\) factor completely so lookups depend *only* on the string length \(L\), regardless of whether the dictionary holds 100 strings or 100 million strings?
+A Hash Table supports exact lookup in $O(L)$ time (where $L$ is the string length, since hashing the string reads all $L$ characters), but **a Hash Table cannot do prefix searches or longest-prefix matches at all** without scanning every key!
+A balanced BST supports prefix ranges in $O(L \cdot \log N)$ character comparisons.
+Can we eliminate the $\log N$ factor completely so lookups depend *only* on the string length $L$, regardless of whether the dictionary holds 100 strings or 100 million strings?
 
 Yes: the **Trie (Prefix Tree / Digital Search Tree)**[^skiena-adm][^sedgewick-alg]:
 
@@ -337,13 +337,13 @@ Standard Prefix Trie (Keys: "app", "apple", "apply", "apt")      Compressed Radi
 ### Standard Trie vs Compressed Radix (Patricia) Tree
 
 In a **Standard Prefix Trie**, each node contains an ordered child array (for example, `TrieNode?[26]` for lowercase ASCII `'a'..'z'` or `SortedDictionary<char, TrieNode>`) plus a boolean `IsEndOfWord` marker.
-Inserting a word, searching for an exact word, or checking whether a prefix exists walks character by character from the root in **\(O(L)\) time**, independent of the number of words \(N\) stored in the trie.
+Inserting a word, searching for an exact word, or checking whether a prefix exists walks character by character from the root in **$O(L)$ time**, independent of the number of words $N$ stored in the trie.
 To delete a word without breaking longer words that share its prefix (such as deleting `"be"` while keeping `"beer"`), recursion walks to the terminal node of `"be"`, clears `IsEndOfWord = false`, and unlinks child pointers on the way back up **only if a node has zero remaining children and `IsEndOfWord == false`**.
 
 What is the downside of a naive Standard Trie in production? **Space overhead on long unbranched strings!**
 If you insert `"microservice-configuration-v1"` into a character-by-character trie, it allocates 29 separate heap nodes connected by single-child pointers.
 A **Radix Tree (Compact Prefix Tree / Patricia Trie)** fixes this by **merging every chain of single-child nodes into a single edge labeled with a substring slice (`"ap"`, `"le"`, `"ly"`)**[^sedgewick-alg].
-Every internal node in a Radix Tree is guaranteed to have at least two children (or be an end-of-key marker), bounding the total number of nodes in the tree to at most \(2N\) regardless of how long the strings are!
+Every internal node in a Radix Tree is guaranteed to have at least two children (or be an end-of-key marker), bounding the total number of nodes in the tree to at most $2N$ regardless of how long the strings are!
 
 **Where Radix Tries Run the Internet (IP Routing Longest-Prefix Match):**
 Every core internet router and cloud virtual network switch maintains a forwarding table of CIDR prefixes (`10.0.0.0/8`, `10.24.0.0/16`, `10.24.128.0/20`).
@@ -357,7 +357,7 @@ That structural property makes the three classic challenges from `Trie.md` clean
 
 1. **Total Number of Words in a Trie (`CountWords`)**: Starting at `_root`, traverse all non-null child branches recursively and increment the count by `1` at every node where `node.IsEndOfWord == true`.
 2. **Find All Words in a Trie in Alphabetical Order (`GetAllWordsSorted`)**: Maintain a character buffer (or `StringBuilder`) indexed by recursion `level`: at depth `level`, write the edge character `ch` into `buffer[level]`, emit `new string(buffer, 0, level + 1)` whenever `child.IsEndOfWord` is true, and recurse to `level + 1`.
-3. **Sort an Array of Strings Using a Trie (`SortArrayWithTrie`)**: Insert all strings from the unsorted input array into a fresh Trie in \(O(\sum L_i)\) total character steps, and then run `GetAllWordsSorted()` to read them out in alphabetical order without a single string-to-string `CompareTo` call! (If duplicate strings in the input array must be preserved, store an integer `WordCount` instead of a boolean `IsEndOfWord` at each terminal node.)
+3. **Sort an Array of Strings Using a Trie (`SortArrayWithTrie`)**: Insert all strings from the unsorted input array into a fresh Trie in $O(\sum L_i)$ total character steps, and then run `GetAllWordsSorted()` to read them out in alphabetical order without a single string-to-string `CompareTo` call! (If duplicate strings in the input array must be preserved, store an integer `WordCount` instead of a boolean `IsEndOfWord` at each terminal node.)
 
 ```csharp
 public sealed class AlphabetTrie
@@ -465,7 +465,7 @@ To index 2D (or $k$-D) space so that points close together in physical space are
 
 ### 1. The Quad-Tree (Recursive 2D Quadrant Subdivision)
 
-A **Quad-Tree** partitions a 2D rectangular bounding box (`Boundary = [MinX, MaxX] x [MinY, MaxY]`) by recursively subdividing any leaf region that exceeds its capacity threshold \(C\) (say \(C = 4\) or \(C = 64\) points) into **four equal child quadrants**: **NorthWest (`NW`)**, **NorthEast (`NE`)**, **SouthWest (`SW`)**, and **SouthEast (`SE`)**[^samet-spatial]:
+A **Quad-Tree** partitions a 2D rectangular bounding box (`Boundary = [MinX, MaxX] x [MinY, MaxY]`) by recursively subdividing any leaf region that exceeds its capacity threshold $C$ (say $C = 4$ or $C = 64$ points) into **four equal child quadrants**: **NorthWest (`NW`)**, **NorthEast (`NE`)**, **SouthWest (`SW`)**, and **SouthEast (`SE`)**[^samet-spatial]:
 
 ```
 2D Spatial Map with Adaptive Quad-Tree Subdivision (Capacity C = 2 points per leaf)
@@ -487,7 +487,7 @@ A **Quad-Tree** partitions a 2D rectangular bounding box (`Boundary = [MinX, Max
 Look at why a Quad-Tree adapts so cleanly to skewed real-world geography:
 - Oceans and deserts (with almost zero points) stay as **single large undivided leaf nodes** at depth 1 or 2, consuming almost zero memory.
 - Dense urban centers (like downtown Tokyo or London) subdivide recursively to depth 12 or 16, isolating small city blocks into fast leaf buckets!
-- **2D Bounding-Box Range Query (`QueryRange(Rect queryBox)`)**: Start at the Root. If `!node.Boundary.Intersects(queryBox)`, **prune the entire subtree immediately in \(O(1)\) time**! Otherwise, check the points in the node and recurse only into the child quadrants whose boundaries intersect `queryBox`.
+- **2D Bounding-Box Range Query (`QueryRange(Rect queryBox)`)**: Start at the Root. If `!node.Boundary.Intersects(queryBox)`, **prune the entire subtree immediately in $O(1)$ time**! Otherwise, check the points in the node and recurse only into the child quadrants whose boundaries intersect `queryBox`.
 
 ### 2. Geohashes and Space-Filling Curves (Mapping 2D into a 1D Prefix Trie/B+Tree)
 
@@ -516,9 +516,9 @@ In **Atlas**, all three tree families solve concrete subsystem bottlenecks:
 ## Before you move on
 
 Trees organize keys hierarchically to accelerate search, ordering, and spatial partitioning.
-In memory, **AVL Trees** maintain strict height balance (`BF in {-1, 0, +1}`) via single and double rotations (`LL, RR, LR, RL`) for optimal lookup speed, while **Red-Black Trees** enforce color and black-height invariants (`H <= 2 log_2(N+1)`) to cap insert/delete rotations at \(O(1)\).
+In memory, **AVL Trees** maintain strict height balance (`BF in {-1, 0, +1}`) via single and double rotations (`LL, RR, LR, RL`) for optimal lookup speed, while **Red-Black Trees** enforce color and black-height invariants (`H <= 2 log_2(N+1)`) to cap insert/delete rotations at $O(1)$.
 Algorithmic problems over binary trees map cleanly onto **Preorder** (top-down bounds, serialization), **Inorder** (sorted BST sequences, validation, successor), **Postorder** (bottom-up subtree aggregation and pruning), and **BFS Level-Order** (minimum depth, level width).
-For string keys, **Prefix Tries** and path-compressed **Radix Trees** deliver \(O(L)\) prefix searches, lexicographical autocomplete, and **Longest-Prefix Match (LPM)** routing.
+For string keys, **Prefix Tries** and path-compressed **Radix Trees** deliver $O(L)$ prefix searches, lexicographical autocomplete, and **Longest-Prefix Match (LPM)** routing.
 For 2D geospatial coordinates, **Quad-Trees** recursively subdivide crowded quadrants into `NW, NE, SW, SE` leaves, **Geohashes** interleave coordinate bits to turn 2D cells into 1D prefix strings, and **R-Trees** balance minimum bounding rectangles on disk.
 
 To test your understanding before moving to Module 20, trace this changed case: suppose two delivery vans are parked just **10 meters apart** on opposite sides of the **Prime Meridian (`Longitude = -0.00005` and `Longitude = +0.00005`)** in London.

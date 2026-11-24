@@ -59,7 +59,7 @@ Look at the four algorithmic optimizations that make this pipeline sub-milliseco
 2. **Bloom Filter & Inverted Index Pre-Screening (`130,000 -> ~150` Rules)**:
    Every driver rule requires at least one matching `HardwareId` from the device's PnP tree.
    Instead of iterating over all 130,000 catalog rules and asking *"Does the device have this rule's HardwareId?"*, we invert the lookup at catalog-compile time into an **Inverted Index (`Dictionary<int, int[]> hardwareSymbolToRuleIds`)** fronted by a **Bloom Filter** of all catalog-referenced hardware symbols.
-   In \(O(K)\) lookups (where \(K \approx 1{,}000\) is the device's attribute count, **not** the 130,000 catalog size!), we intersect the device's hardware symbols against the inverted index and immediately eliminate `99.8%` of the catalog!
+   In $O(K)$ lookups (where $K \approx 1{,}000$ is the device's attribute count, **not** the 130,000 catalog size!), we intersect the device's hardware symbols against the inverted index and immediately eliminate `99.8%` of the catalog!
 3. **Selectivity-Ordered Short-Circuit AST + Sub-Expression Memoization**:
    Across 10,000 applicability expressions, many sub-expressions repeat thousands of times (for example, `OsArch == 'amd64' AND OsBuild >= 26100`).
    By assigning each unique AST subtree a canonical **Directed Acyclic Graph (`DAG`) Node ID** (the **Flyweight Pattern** from Module 14!), evaluating `Node #42` (`OsBuild >= 26100`) **once** caches its boolean result in a stack-allocated bitset (`Span<ulong> memoBits`), so the remaining 8,500 expressions that share `Node #42` read its truth value in **1 CPU instruction**!
